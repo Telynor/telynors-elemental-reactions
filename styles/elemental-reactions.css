@@ -16,4 +16,4 @@
 .ter-character-access details{border:1px solid var(--color-border-light-primary);border-radius:7px;margin:.4rem 0}.ter-character-access summary{cursor:pointer;display:flex;justify-content:space-between;padding:.65rem}.ter-character-body{padding:.75rem}.ter-infusion{margin-bottom:.6rem!important}.ter-character-element-tab{margin:.5rem;padding:.5rem;border:1px solid var(--color-border-light-primary);border-radius:7px}.ter-character-element-tab summary{cursor:pointer;font-weight:700}.ter-character-element-content{padding:.6rem}.ter-element-tab-button{cursor:pointer}
 
 /* Reaction callouts: exact element gradient with a bright edge, no duplicate glyph */
-.ter-reaction-callout{filter:drop-shadow(0 0 7px var(--ter-c1)) drop-shadow(0 0 7px var(--ter-c2));text-shadow:none;-webkit-text-stroke:0;paint-order:fill}
+.ter-reaction-callout{filter:none;text-shadow:none;-webkit-text-stroke:0;paint-order:fill}
