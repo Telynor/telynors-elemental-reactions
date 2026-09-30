@@ -1,0 +1,36 @@
+@layer telynors-elemental-reactions {
+  .ter-reaction-callout {
+    pointer-events: none;
+    position: absolute;
+    z-index: 100;
+    font-weight: 900;
+    letter-spacing: 0.02em;
+    transform: translate(-50%, -50%) scale(0.7);
+    opacity: 0;
+    animation: ter-reaction-pop 1400ms ease-out forwards;
+    -webkit-text-stroke: 2px rgba(0, 0, 0, 0.75);
+    text-shadow: 0 3px 6px rgba(0, 0, 0, 0.6);
+  }
+
+  @keyframes ter-reaction-pop {
+    0% {
+      opacity: 0;
+      transform: translate(-50%, -35%) scale(0.7);
+    }
+    15% {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1.14);
+    }
+    28% {
+      transform: translate(-50%, -50%) scale(1);
+    }
+    72% {
+      opacity: 1;
+      transform: translate(-50%, -72%) scale(1);
+    }
+    100% {
+      opacity: 0;
+      transform: translate(-50%, -95%) scale(0.96);
+    }
+  }
+}
