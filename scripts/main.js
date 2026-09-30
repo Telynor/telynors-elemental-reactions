@@ -25,9 +25,7 @@ Hooks.once("init",()=>{for(let[k,d]of[["elements",E],["reactions",R],["variants"
 Hooks.once("ready",()=>{layer();game.modules.get(M).api={applyElement:setElement,executeReaction:runReaction,getElement:el,getReaction:reaction,showReactionText:callout,openManager:()=>new Manager().render(true),openDirectory:()=>new Directory().render(true),openGMPanel:()=>new GMPanel().render(true)}});
 Hooks.on("canvasReady",()=>canvas.tokens.placeables.forEach(refresh));Hooks.on("updateToken",(d,c)=>{if(foundry.utils.hasProperty(c,`flags.${M}.appliedElement`))refresh(d.object)});
 function midiTargets(w){let raw=w?.hitTargets?.size?w.hitTargets:w?.targets?.size?w.targets:w?.hitTargets||w?.targets||[];return [...raw].map(x=>x?.object||x).filter(x=>x?.document?.documentName==="Token"||x?.documentName==="Token").map(x=>x.object||x)}
-async function midiApply(w){if(!game.user.isGM)return;let actor=w?.actor||w?.item?.actor||w?.workflow?.actor;if(!actor)return;let e=active(actor);if(!e||!infused(actor))return;let targets=midiTargets(w);if(!targets.length)return;for(let t of targets)await setElement(t,e,actor)}
-Hooks.on("midi-qol.RollComplete",midiApply);
-Hooks.on("midi-qol.postAttackRollComplete",midiApply);
+async function midiApply(w){if(!game.user.isGM)return;let actor=w?.actor||w?.item?.actor||w?.workflow?.actor;if(!actor)return;let e=active(actor);if(!e||!infused(actor))return;let targets=midiTargets(w);if(!targets.length)return;let damageList=w?.damageList||w?.damageItem?.damageList||[];for(let t of targets){let row=damageList.find(d=>d.tokenUuid===t.document?.uuid||d.tokenId===t.id||d.tokenId===t.document?.id);let amount=row?.appliedDamage??row?.hpDamage??row?.damageDetail?.reduce?.((n,d)=>n+(Number(d.value)||0),0);if(amount!==undefined&&Number(amount)<=0)continue;await setElement(t,e,actor)}}
 Hooks.on("midi-qol.postDamageRollComplete",midiApply);
 Hooks.on("updateCombat",async(c,x)=>{if(x.turn!==undefined&&c.combatant?.getFlag(M,"collective"))await zones()});
 
