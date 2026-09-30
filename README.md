@@ -1,32 +1,26 @@
 # Telynor's Elemental Reactions
 
-A Foundry VTT module for configurable elemental application, reaction resolution, visual callouts, zones, summons, and Midi-QOL-driven automation.
+Foundry VTT v14 / dnd5e module for configurable Genshin-style elemental reactions.
 
-## Status
+## Alpha features
 
-Early development scaffold.
+- Seven default elements: Fire, Ice, Nature, Wind, Light, Dark, Physical.
+- Element state on tokens with icon badge and glow.
+- Actor infusion: an infused actor applies its active element to every Midi-QOL hit target.
+- Second-element ownership: the actor applying the second element is the reaction source.
+- Reaction directory with the default fusion pair names from Telynor's rules.
+- Reaction Creation Wizard: damage, Actor summons, persistent visible zones, zone damage/element application, and text design.
+- Reaction callouts over every affected token: pop, rise, fade, custom font, gradients; Vortex is Wind → partner element.
+- Player element picker on character sheets, limited to GM-unlocked elements.
+- Collective `Summoned Entities` combat turn for zone/summon processing.
+- Priority-ready special variant override data model.
+- Public API at `game.modules.get("telynors-elemental-reactions").api`.
+- JSON export of element/reaction/variant configuration.
 
-## Planned core systems
+## Install
 
-- Configurable elements with icons, colors, glows, and damage-type mappings
-- Element application from infused actors
-- Reaction directory and ordered effect stacks
-- Midi-QOL damage/effect execution
-- Dice So Nice integration
-- Per-token reaction callouts with custom gradients and animation
-- Token element badges and glow
-- Player element selection constrained by GM unlocks
-- Summoned entities and reaction zones
-- Variant/override system with GM-defined priority
-- Import/export of elemental reaction libraries
+Paste the manifest URL from the latest release into Foundry's **Install Module** dialog.
 
-## Dependencies
+## Important alpha note
 
-- Foundry VTT v14
-- dnd5e
-- Midi-QOL
-- Dice So Nice
-
-## Development
-
-This repository is being built iteratively. Expect frequent schema and API changes until the first tagged release.
+Foundry sheets and Midi-QOL APIs evolve. This is the first testable alpha; bug reports should include Foundry, dnd5e, Midi-QOL and Dice So Nice versions plus browser-console errors.
