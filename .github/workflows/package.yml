@@ -1,0 +1,26 @@
+name: Package Foundry Module
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Foundry-ready ZIP
+        run: |
+          rm -f telynors-elemental-reactions.zip
+          zip -r telynors-elemental-reactions.zip module.json scripts styles -x "*.DS_Store"
+      - name: Publish rolling package
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest Development Build
+          prerelease: true
+          files: telynors-elemental-reactions.zip
