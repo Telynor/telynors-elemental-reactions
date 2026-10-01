@@ -21,19 +21,19 @@ async function refresh(t){if(!t)return;let e=el(applied(t));for(let b of [...(t.
   if(t._terGlow)t._terGlow.filter=null;
   const aura=new PIXI.Container(),rings=[];
   const w=Math.max(24,t.w||t.document?.width*canvas.grid.size||100),h=Math.max(24,t.h||t.document?.height*canvas.grid.size||100);
-  aura.position.set(w/2,h/2);
+  aura.position.set(t.x+w/2,t.y+h/2);
   const cols=[0xff3b30,0xff9500,0xffcc00,0x34c759,0x32ade6,0x5856d6,0xaf52de];
   for(let i=0;i<cols.length;i++){
     const g=new PIXI.Graphics(),pad=5+i*3;
-    g.ellipse(0,0,w/2+pad,h/2+pad).stroke({width:3,color:cols[i],alpha:.55});
+    g.ellipse(0,0,w/2+pad,h/2+pad);g.stroke({width:3,color:cols[i],alpha:.55});
     g.alpha=.65; aura.addChild(g); rings.push(g);
   }
   aura.blendMode=PIXI.BLEND_MODES?.ADD??"add";
   aura.eventMode="none";
-  t.addChildAt(aura,0);
+  const host=t.parent||canvas.tokens;host.addChild(aura);if(host.setChildIndex)host.setChildIndex(aura,Math.max(0,host.getChildIndex(t)));
   t._terGlow.rainbowAura=aura;
   let phase=0;
-  t._terGlow.rainbow=setInterval(()=>{phase=(phase+1)%cols.length;for(let i=0;i<rings.length;i++)rings[i].alpha=.25+.5*((i+phase)%cols.length)/(cols.length-1)},80);
+  t._terGlow.rainbow=setInterval(()=>{phase=(phase+1)%cols.length;aura.position.set(t.x+w/2,t.y+h/2);for(let i=0;i<rings.length;i++)rings[i].alpha=.25+.5*((i+phase)%cols.length)/(cols.length-1)},80);
 }catch(err){console.warn(M+" | Divine rainbow aura failed safely",err)}}}else console.warn(M+" | No supported silhouette outline filter found", {mesh,Filter})}catch(err){console.error(M+" | silhouette glow render failed",err)}try{let tex=await foundry.canvas.loadTexture(e.icon||"icons/svg/aura.svg"),size=Math.max(22,Math.min(t.w,t.h)*.28),b=new PIXI.Sprite(tex);b.width=b.height=size;b.x=3;b.y=t.h-size-3;b.zIndex=999;b.eventMode="none";b._terElementBadge=true;t.addChild(b);t._terBadge=b}catch(err){console.error(M+" | badge render failed",err)}}
 async function summonedTurn(){if(!game.combat||!game.user.isGM||game.combat.combatants.some(c=>c.getFlag(M,"collective")))return;await game.combat.createEmbeddedDocuments("Combatant",[{name:"Summoned Entities",initiative:0,flags:{[M]:{collective:true}}}])}
 async function zones(){for(let d of canvas.scene.templates){let z=d.getFlag(M,"zone");if(!z||!d.object?.shape)continue;let done=new Set(z.damaged||[]),src=z.sourceActorUuid?await fromUuid(z.sourceActorUuid):null;for(let t of canvas.tokens.placeables){let p=d.object.toLocal(t.center);if(!d.object.shape.contains(p.x,p.y))continue;if(z.damageFormula&&!done.has(t.document.uuid)){await damage(src,t,z.damageFormula,z.damageType||z.elementId);done.add(t.document.uuid)}await setElement(t,z.elementId,src)}await d.setFlag(M,"zone",{...z,damaged:[...done]})}}
