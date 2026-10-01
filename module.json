@@ -22,7 +22,7 @@
   "socket": true,
   "url": "https://github.com/Telynor/telynors-elemental-reactions",
   "manifest": "https://raw.githubusercontent.com/Telynor/telynors-elemental-reactions/main/module.json",
-  "download": "https://github.com/Telynor/telynors-elemental-reactions/archive/refs/heads/main.zip",
+  "download": "https://github.com/Telynor/telynors-elemental-reactions/releases/download/latest/telynors-elemental-reactions.zip",
   "relationships": {
     "systems": [
       {
