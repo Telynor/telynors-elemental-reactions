@@ -3,7 +3,7 @@
   "type": "module",
   "title": "Telynor's Elemental Reactions",
   "description": "A configurable elemental reaction engine for Foundry VTT with Midi-QOL automation, reaction callouts, zones, summons, and priority-based variants.",
-  "version": "0.1.32",
+  "version": "0.1.33",
   "compatibility": {
     "minimum": "14",
     "verified": "14"
