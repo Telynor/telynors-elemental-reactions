@@ -381,8 +381,22 @@ export function createAutomation({M,el,setElement,damage,ensureCollective,queueM
       if(!targetDoc)return;
       const boundary=footprint(targetDoc);
       const docs=canvas.scene?.tokens?.contents||tokens().map(t=>t.document);
+      const normalize=value=>String(value||"").toLowerCase().replace(/[^a-z0-9]/g,"");
+      const isDefaultRimebud=normalize(ref)==="rimebud"||normalize(ref)==="rhimebud";
+      const matchesEntity=state=>{
+        if(!state)return false;
+        if(normalize(state.entityRef)===normalize(ref))return true;
+        // Legacy spelling and custom references assigned inside Rimebud's builder.
+        // The ice+nature summon carries its original reaction pair in its flags.
+        return isDefaultRimebud&&(
+          normalize(state.entityRef)==="rimebud"||normalize(state.entityRef)==="rhimebud"||
+          (["ice","nature"].includes(state.firstElement)&&
+           ["ice","nature"].includes(state.secondElement)&&
+           state.firstElement!==state.secondElement)||
+          state.reactionId==="ice-nature");
+      };
       const touching=docs.filter(doc=>doc?.id&&doc.id!==targetDoc.id&&
-        doc.getFlag?.(M,"summoned")?.entityRef===ref&&
+        matchesEntity(doc.getFlag?.(M,"summoned"))&&
         footprintsTouch(footprint(doc),boundary));
       if(!touching.length){
         console.log(M+" | Enkindle: no touching "+ref+" entities to consume.");
