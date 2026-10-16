@@ -19,7 +19,7 @@ export function createReactionBuilder({M,get,cp}) {
   function valuesFor(name){
     if(FIELD_OPTIONS[name])return FIELD_OPTIONS[name];
     if(name==="elementId")return get("elements").map(e=>[e.id,e.name]);
-    if(name==="damageType")return [["","Choose damage type"],...["acid","bludgeoning","cold","fire","force","lightning","necrotic","piercing","poison","psychic","radiant","slashing","thunder"].map(s=>[s,s])];
+    if(name==="damageType")return null; // Custom and system-defined damage types are both allowed.
     return null;
   }
   function renderField(f,name,path){
@@ -105,9 +105,12 @@ export function createReactionBuilder({M,get,cp}) {
         const b=get("elements").find(e=>e.id===q('[name="b"]')?.value);
         const p=q(".ter-preview");if(!p)return;
         p.textContent=(q('[name="name"]')?.value||"REACTION").toUpperCase();
-        p.style.backgroundImage='linear-gradient(90deg,'+(a?.color||"#fff")+','+(b?.color||"#fff")+')';
+        const mode=q('[name="textMode"]')?.value,dir=q('[name="direction"]')?.value;
+        const angle={right:"90deg",left:"270deg",up:"0deg",down:"180deg"}[dir]||"90deg";
+        p.style.backgroundImage=mode==="solid"?"linear-gradient("+q('[name="solid"]').value+","+q('[name="solid"]').value+")":
+          "linear-gradient("+angle+","+(a?.color||"#fff")+","+(b?.color||"#fff")+")";
       };
-      root.querySelectorAll('[name="name"],[name="a"],[name="b"]').forEach(x=>x.addEventListener("input",preview));
+      root.querySelectorAll('[name="name"],[name="a"],[name="b"],[name="textMode"],[name="direction"],[name="solid"]').forEach(x=>x.addEventListener("input",preview));
       preview();this.repaint();
       const decode=x=>JSON.parse(decodeURIComponent(x||"%5B%5D"));
       root.querySelector("[data-role=steps]")?.addEventListener("input",e=>{
@@ -149,7 +152,10 @@ export function createReactionBuilder({M,get,cp}) {
         const area=e.target.closest(".ter-actor-drop");if(!area)return;
         e.preventDefault();
         try{
-          const data=TextEditor.getDragEventData(e);
+          const getDrag=globalThis.TextEditor?.getDragEventData||
+            foundry.applications?.ux?.TextEditor?.implementation?.getDragEventData;
+          if(!getDrag)throw new Error("Foundry drag data helper unavailable");
+          const data=getDrag(e);
           if(data?.type!=="Actor")return ui.notifications.warn("Drop an Actor document, not an item or token.");
           const actor=await fromUuid(data.uuid);
           if(actor?.documentName!=="Actor")return ui.notifications.warn("Could not resolve that Actor.");
