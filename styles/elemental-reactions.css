@@ -17,3 +17,25 @@
 
 /* Reaction callouts: exact element gradient with a bright edge, no duplicate glyph */
 .ter-reaction-callout{filter:none;text-shadow:none;-webkit-text-stroke:0;paint-order:fill}
+
+
+/* Ordered reaction and variant automation builder */
+.ter-builder{height:100%;overflow-y:auto;padding:1rem;box-sizing:border-box}
+.ter-builder-header h2{margin:.15rem 0}.ter-builder-header p{opacity:.85;margin:.25rem 0 .85rem}
+.ter-builder .ter-effect-step{border:1px solid var(--color-border-light-primary);border-radius:8px;margin:.65rem 0;padding:.65rem;background:rgba(127,127,127,.075)}
+.ter-builder .ter-effect-step>summary{font-weight:700;cursor:pointer;margin-bottom:.5rem}
+.ter-builder .ter-step-tools{display:flex;justify-content:flex-end;gap:.4rem;margin:.5rem 0;flex-wrap:wrap}
+.ter-builder .ter-step-tools button{width:auto;padding:.3rem .65rem;min-width:0}
+.ter-builder .ter-step-fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.4rem .8rem}
+.ter-builder .ter-step-fields label{min-width:0}
+.ter-builder .ter-step-fields input,.ter-builder .ter-step-fields select{width:100%;box-sizing:border-box}
+.ter-builder .ter-substeps{margin:.65rem 0 .65rem 1rem;border-left:3px solid var(--color-border-highlight);padding:.65rem .35rem .65rem .8rem}
+.ter-builder .ter-substeps h4{margin:0 0 .5rem}
+.ter-builder .ter-substeps button{width:auto}
+.ter-builder .ter-actor-drop{border:2px dashed var(--color-border-light-primary);border-radius:8px;padding:.55rem}
+.ter-builder .ter-actor-drop:has(input:focus){border-color:var(--color-border-highlight)}
+.ter-builder .ter-drop-hint{opacity:.7;font-size:.8rem}
+.ter-builder .ter-inline-check{display:flex;flex-direction:row;align-items:center}
+.ter-builder .ter-inline-check input{width:auto}
+.ter-builder .ter-builder-footer{display:flex;justify-content:flex-end;gap:.75rem;position:sticky;bottom:0;padding:.7rem 0;background:var(--color-bg,transparent);backdrop-filter:blur(6px)}
+.ter-builder .ter-builder-footer [data-op=delete]{margin-right:auto}
