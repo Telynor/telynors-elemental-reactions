@@ -8,6 +8,11 @@ on:
 permissions:
   contents: write
 
+# Only the newest main branch build should publish the rolling release.
+concurrency:
+  group: elemental-reactions-rolling-package
+  cancel-in-progress: true
+
 jobs:
   package:
     runs-on: ubuntu-latest
@@ -16,7 +21,13 @@ jobs:
       - name: Build Foundry-ready ZIP
         run: |
           rm -f telynors-elemental-reactions.zip
-          zip -r telynors-elemental-reactions.zip module.json scripts styles -x "*.DS_Store"
+          zip -r telynors-elemental-reactions.zip module.json scripts styles templates -x "*.DS_Store"
+          # Fail the build if any of the app window templates are missing.
+          for file in templates/directory.hbs templates/gm-panel.hbs templates/manager.hbs templates/element-editor.hbs templates/reaction-wizard.hbs templates/character-element.hbs; do
+            unzip -Z1 telynors-elemental-reactions.zip | grep -Fxq "$file" || { echo "Missing package file: $file"; exit 1; }
+          done
+          unzip -Z1 telynors-elemental-reactions.zip | grep -Fxq "module.json"
+          unzip -Z1 telynors-elemental-reactions.zip | grep -Fxq "scripts/main.js"
       - name: Publish rolling package
         uses: softprops/action-gh-release@v2
         with:
