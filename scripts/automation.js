@@ -12,6 +12,7 @@ export const EFFECT_SCHEMA = {
   zone:{label:"Create zone",fields:["elementId","radius","damageFormula","damageType","targetFilter"]},
   ability:{label:"Modify an ability",fields:["ability","amount","duration","targetMode","origin","entityRef","radius","targetFilter"]},
   resistance:{label:"Grant damage resistance",fields:["damageType","duration","untilTempHpGone","targetMode","origin","entityRef","radius","targetFilter"]},
+  resistanceShift:{label:"Reduce immunity/resistance by one step",fields:["damageType","duration","targetMode","origin","entityRef","radius","targetFilter"]},
   removeEffects:{label:"Remove reaction effects",fields:["elementsToClear","targetMode","origin","entityRef","radius","targetFilter"]},
   annihilate:{label:"Annihilate Light/Dark effects (combat)",fields:["damageType"]},
   sequence:{label:"Sub-bracket / sequence",fields:["label"],children:["steps"]}
@@ -35,6 +36,7 @@ export const EFFECT_DEFAULTS = {
   zone:{type:"zone",elementId:"fire",radius:10,damageFormula:"",damageType:"fire",targetFilter:"all"},
   ability:{type:"ability",ability:"str",amount:-1,duration:2,targetMode:"target",targetFilter:"all",origin:"target",radius:5},
   resistance:{type:"resistance",damageType:"fire",duration:2,untilTempHpGone:false,targetMode:"target",targetFilter:"all",origin:"target",radius:5},
+  resistanceShift:{type:"resistanceShift",damageType:"@trigger",duration:2,targetMode:"target",targetFilter:"all",origin:"target",radius:5},
   removeEffects:{type:"removeEffects",elementsToClear:"light,dark",targetMode:"area",targetFilter:"all",origin:"target",radius:9999},
   annihilate:{type:"annihilate",damageType:"force"},
   sequence:{type:"sequence",label:"Sub-bracket",steps:[]}
@@ -126,6 +128,38 @@ export function createAutomation({M,el,setElement,damage,ensureCollective}) {
     }
     if(f.type==="applyElement"){
       for(const t of resolveTargets(f,c)){await setElement(t,f.elementId||c.secondElement,c.sourceActor);c.affected.add(t)}
+      return;
+    }
+    if(f.type==="resistanceShift"){
+      const raw=String(f.damageType||"@trigger");
+      const types=raw==="@trigger"?(el(c.secondElement)?.damageTypes||[]):raw.split(",").map(x=>x.trim()).filter(Boolean);
+      for(const t of resolveTargets(f,c)){
+        const immunity=t.actor.system?.traits?.di?.value;
+        const resist=t.actor.system?.traits?.dr?.value;
+        const has=(collection,id)=>collection?.has?.(id)||Array.isArray(collection)&&collection.includes(id);
+        // Frostburn does nothing to a creature immune to both opposing elements.
+        if(c.reaction?.name?.toLowerCase()==="frostburn"){
+          const fire=el("fire")?.damageTypes||["fire"],ice=el("ice")?.damageTypes||["cold"];
+          if(fire.some(id=>has(immunity,id))&&ice.some(id=>has(immunity,id)))continue;
+        }
+        const changes=[];
+        for(const type of types){
+          if(has(immunity,type)){
+            changes.push({key:"system.traits.di.value",mode:2,value:"-"+type,priority:20});
+            changes.push({key:"system.traits.dr.value",mode:2,value:type,priority:21});
+          }else if(has(resist,type)){
+            changes.push({key:"system.traits.dr.value",mode:2,value:"-"+type,priority:20});
+          }
+        }
+        if(!changes.length)continue;
+        await t.actor.createEmbeddedDocuments("ActiveEffect",[{
+          name:"Elemental Reaction: Resistance Down",img:"icons/svg/daze.svg",
+          origin:c.sourceActor?.uuid||null,changes,
+          duration:{rounds:Math.max(1,Number(f.duration)||2),startRound:game.combat?.round||0,startTurn:game.combat?.turn||0},
+          flags:{[M]:{reactionId:c.reaction?.id||"",elements:[c.firstElement,c.secondElement],effectType:"resistanceShift"}}
+        }]);
+        c.affected.add(t);
+      }
       return;
     }
     if(f.type==="ability"||f.type==="resistance"){
