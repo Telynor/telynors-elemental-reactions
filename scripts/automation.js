@@ -2,7 +2,7 @@
  * All execution occurs on the active GM client; the builder consumes EFFECT_SCHEMA.
  */
 export const EFFECT_SCHEMA = {
-  damage:{label:"Apply damage",fields:["formula","damageType","targetMode","origin","radius","targetFilter"]},
+  damage:{label:"Apply damage",fields:["formula","damageType","targetMode","origin","radius","targetFilter","excludeOriginEntity"]},
   heal:{label:"Heal HP",fields:["formula","targetMode","origin","radius","targetFilter"]},
   tempHp:{label:"Grant temporary HP",fields:["formula","multiplierEntityRef","targetMode","origin","radius","targetFilter"]},
   applyElement:{label:"Apply element",fields:["elementId","targetMode","origin","radius","targetFilter"]},
@@ -25,7 +25,7 @@ export const FIELD_OPTIONS = {
   ability:[["str","Strength"],["dex","Dexterity"],["con","Constitution"],["int","Intelligence"],["wis","Wisdom"],["cha","Charisma"]]
 };
 export const EFFECT_DEFAULTS = {
-  damage:{type:"damage",formula:"1d4",damageType:"fire",targetMode:"target",targetFilter:"all",origin:"target",radius:5},
+  damage:{type:"damage",formula:"1d4",damageType:"fire",targetMode:"target",targetFilter:"all",origin:"target",radius:5,excludeOriginEntity:false},
   heal:{type:"heal",formula:"1d4",targetMode:"target",targetFilter:"all",origin:"target",radius:5},
   tempHp:{type:"tempHp",formula:"2d4",targetMode:"target",targetFilter:"all",origin:"target",radius:5},
   applyElement:{type:"applyElement",elementId:"fire",targetMode:"target",targetFilter:"all",origin:"target",radius:5},
@@ -34,7 +34,7 @@ export const EFFECT_DEFAULTS = {
   detonateEntity:{type:"detonateEntity",entityRef:"rimebud",searchRadius:5,radius:5,formula:"1d4",damageType:"fire",targetFilter:"all"},
   zone:{type:"zone",elementId:"fire",radius:10,damageFormula:"",damageType:"fire",targetFilter:"all"},
   ability:{type:"ability",ability:"str",amount:-1,duration:2,targetMode:"target",targetFilter:"all",origin:"target",radius:5},
-  resistance:{type:"resistance",damageType:"fire",duration:2,targetMode:"target",targetFilter:"all",origin:"target",radius:5},
+  resistance:{type:"resistance",damageType:"fire",duration:2,untilTempHpGone:false,targetMode:"target",targetFilter:"all",origin:"target",radius:5},
   removeEffects:{type:"removeEffects",elementsToClear:"light,dark",targetMode:"area",targetFilter:"all",origin:"target",radius:9999},
   annihilate:{type:"annihilate",damageType:"force"},
   sequence:{type:"sequence",label:"Sub-bracket",steps:[]}
@@ -71,7 +71,8 @@ export function createAutomation({M,el,setElement,damage,ensureCollective}) {
       const p=centerFor(step,c),r=radiusPx(step.radius||5);
       if(p)found=tokens().filter(t=>loc(t)&&dist(loc(t),p)<=r+Math.min(t.w||0,t.h||0)/4);
     }else found=[c.targetToken].filter(Boolean);
-    return [...new Set(found.map(obj).filter(t=>t?.actor&&friendly(t,c,step.targetFilter)))];
+    const excluded=step.excludeOriginEntity?(c.entities?.[step.entityRef||c.lastEntityRef]||[]):[];
+    return [...new Set(found.map(obj).filter(t=>t?.actor&&friendly(t,c,step.targetFilter)&&!excluded.includes(t)))];
   }
   async function rollAmount(formula,actor) {
     if(!formula)return 0;
@@ -135,8 +136,8 @@ export function createAutomation({M,el,setElement,damage,ensureCollective}) {
         await t.actor.createEmbeddedDocuments("ActiveEffect",[{
           name:"Elemental Reaction: "+(c.reaction?.name||f.type),img:"icons/svg/aura.svg",
           origin:c.sourceActor?.uuid||null,changes:[change],
-          duration:f.untilTempHpGone?{}:{rounds:Math.max(1,Number(f.duration)||2),startRound:game.combat?.round||0,startTurn:game.combat?.turn||0},
-          flags:{[M]:{reactionId:c.reaction?.id||"",elements:[c.firstElement,c.secondElement],effectType:f.type,untilTempHpGone:!!f.untilTempHpGone}}
+          duration:f.untilTempHpGone===true?{}:{rounds:Math.max(1,Number(f.duration)||2),startRound:game.combat?.round||0,startTurn:game.combat?.turn||0},
+          flags:{[M]:{reactionId:c.reaction?.id||"",elements:[c.firstElement,c.secondElement],effectType:f.type,untilTempHpGone:f.untilTempHpGone===true}}
         }]);c.affected.add(t);
       }
       return;
