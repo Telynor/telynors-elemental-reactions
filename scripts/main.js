@@ -7,7 +7,7 @@ const E=[["fire","Fire","#ff6a2a"],["ice","Ice","#74e8ff"],["nature","Nature","#
 const P=[["fire","ice","Frostburn"],["fire","nature","Enkindle"],["fire","wind","Vortex"],["fire","light","Sunshield"],["fire","dark","Sunder"],["ice","nature","Rimebud"],["ice","wind","Vortex"],["ice","light","Ice Aegis"],["ice","dark","Blizzard"],["nature","wind","Vortex"],["nature","light","Spriteshield"],["nature","dark","Prana"],["wind","light","Vortex"],["wind","dark","Vortex"],["light","dark","Annihilate"]];
 const REACTION_EFFECTS={
   frostburn:[{type:"resistanceShift",damageType:"@trigger",duration:2,targetMode:"target"}],
-  enkindle:[{type:"detonateEntity",entityRef:"rimebud",searchRadius:5,radius:5,formula:"1d4",damageType:"fire",targetFilter:"all"}],
+  enkindle:[{type:"detonateEntity",entityRef:"rimebud",formula:"1d4",damageType:"fire",targetMode:"target",origin:"target",radius:5,targetFilter:"all"}],
   rimebud:[{type:"summon",actorUuid:"",entityRef:"rimebud",quantity:1,lifetime:2,placement:"target",
     onTick:[{type:"damage",formula:"1d4",damageType:"acid",targetMode:"area",origin:"entity",entityRef:"rimebud",radius:5,targetFilter:"all",excludeOriginEntity:true}],
     onExpire:[{type:"damage",formula:"1d4",damageType:"acid",targetMode:"area",origin:"entity",entityRef:"rimebud",radius:5,targetFilter:"all",excludeOriginEntity:true}]}],
