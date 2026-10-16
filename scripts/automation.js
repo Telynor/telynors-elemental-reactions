@@ -2,7 +2,7 @@
  * All execution occurs on the active GM client; the builder consumes EFFECT_SCHEMA.
  */
 export const EFFECT_SCHEMA = {
-  damage:{label:"Apply damage",fields:["formula","damageType","targetMode","origin","entityRef","radius","targetFilter","excludeOriginEntity"]},
+  damage:{label:"Apply damage",fields:["formula","damageType","damageMode","targetMode","origin","entityRef","radius","targetFilter","excludeOriginEntity"]},
   heal:{label:"Heal HP",fields:["formula","targetMode","origin","entityRef","radius","targetFilter"]},
   tempHp:{label:"Grant temporary HP",fields:["formula","multiplierEntityRef","targetMode","origin","entityRef","radius","targetFilter"]},
   applyElement:{label:"Apply element",fields:["elementId","targetMode","origin","entityRef","radius","targetFilter"]},
@@ -18,6 +18,7 @@ export const EFFECT_SCHEMA = {
   sequence:{label:"Sub-bracket / sequence",fields:["label"],children:["steps"]}
 };
 export const FIELD_OPTIONS = {
+  damageMode:[["manual","Roll to chat + GM selects creature"],["automatic","Immediately apply damage"]],
   targetMode:[["target","Triggering creature"],["source","Source creature"],["entity","Assigned Entity"],["area","Area around origin"]],
   origin:[["target","Reaction target"],["source","Source creature"],["entity","Assigned Entity"]],
   targetFilter:[["all","All creatures"],["enemies","Enemies only"],["allies","Allies only"]],
@@ -26,7 +27,7 @@ export const FIELD_OPTIONS = {
   ability:[["str","Strength"],["dex","Dexterity"],["con","Constitution"],["int","Intelligence"],["wis","Wisdom"],["cha","Charisma"]]
 };
 export const EFFECT_DEFAULTS = {
-  damage:{type:"damage",formula:"1d4",damageType:"fire",targetMode:"target",targetFilter:"all",origin:"target",radius:5,excludeOriginEntity:false},
+  damage:{type:"damage",formula:"1d4",damageType:"fire",damageMode:"manual",targetMode:"target",targetFilter:"all",origin:"target",radius:5,excludeOriginEntity:false},
   heal:{type:"heal",formula:"1d4",targetMode:"target",targetFilter:"all",origin:"target",radius:5},
   tempHp:{type:"tempHp",formula:"2d4",targetMode:"target",targetFilter:"all",origin:"target",radius:5},
   applyElement:{type:"applyElement",elementId:"fire",targetMode:"target",targetFilter:"all",origin:"target",radius:5},
@@ -84,7 +85,13 @@ export function findAdjacentSpawnPosition({
   return spaces[Math.max(0,Math.min(spaces.length-1,Math.floor((Number.isFinite(n)?n:0)*spaces.length)))];
 }
 
-export function createAutomation({M,el,setElement,damage,ensureCollective}) {
+export function shouldUseManualDamage(step={},context={},targetCount=0){
+  // By default only direct, single-creature reaction damage needs GM approval.
+  // Explicit automatic mode, area damage, and summon/zone/tick automation bypass chat.
+  return step.damageMode!=="automatic"&&context.autoDamage!==true&&
+    (step.targetMode||"target")!=="area"&&targetCount===1;
+}
+export function createAutomation({M,el,setElement,damage,ensureCollective,queueManualDamage}) {
   const cp=x=>foundry.utils.deepClone(x);
   const tokens=()=>canvas?.tokens?.placeables||[];
   const tokenOfActor=a=>tokens().find(t=>t.actor?.uuid===a?.uuid)||null;
@@ -145,7 +152,16 @@ export function createAutomation({M,el,setElement,damage,ensureCollective}) {
   async function executeStep(f,c,depth) {
     if(f.type==="sequence"){await runEffects(f.steps||[],c,depth+1);return}
     if(f.type==="damage"){
-      for(const t of resolveTargets(f,c)){await damage(c.sourceActor,t,f.formula||"1d4",f.damageType||f.elementId||c.secondElement);c.affected.add(t)}
+      const targets=resolveTargets(f,c);
+      const formula=f.formula||"1d4",damageType=f.damageType||f.elementId||c.secondElement;
+      if(shouldUseManualDamage(f,c,targets.length)){
+        if(typeof queueManualDamage!=="function")throw new Error("Chat damage approval is not available; no damage was applied.");
+        await queueManualDamage({formula,damageType,sourceActor:c.sourceActor,reaction:c.reaction,targetToken:targets[0]});
+        c.affected.add(targets[0]);
+      }else for(const t of targets){
+        await damage(c.sourceActor,t,formula,damageType);
+        c.affected.add(t);
+      }
       return;
     }
     if(f.type==="heal"||f.type==="tempHp"){
@@ -242,7 +258,13 @@ export function createAutomation({M,el,setElement,damage,ensureCollective}) {
           await actor.setFlag(M,"tempHpHistory",keep);
         }
       }
-      if(total>0&&c.targetToken){await damage(c.sourceActor,c.targetToken,String(total),f.damageType||"force");c.affected.add(c.targetToken)}
+      if(total>0&&c.targetToken){
+        if(!c.autoDamage&&typeof queueManualDamage==="function"){
+          await queueManualDamage({formula:String(total),damageType:f.damageType||"force",
+            sourceActor:c.sourceActor,reaction:c.reaction,targetToken:c.targetToken});
+        }else await damage(c.sourceActor,c.targetToken,String(total),f.damageType||"force");
+        c.affected.add(c.targetToken);
+      }
       return;
     }
     if(f.type==="removeEffects"){
@@ -357,7 +379,7 @@ export function createAutomation({M,el,setElement,damage,ensureCollective}) {
       if(!state||state.lastTickRound===round)continue;
       const src=state.sourceActorUuid?await fromUuid(state.sourceActorUuid):null;
       const ctx=makeContext({sourceActor:src,targetToken:t,firstElement:state.firstElement,secondElement:state.secondElement,
-        reaction:{id:state.reactionId,name:"Summoned Entity"},entities:{[state.entityRef]:[t]},positions:{[state.entityRef]:loc(t)},lastEntityRef:state.entityRef});
+        reaction:{id:state.reactionId,name:"Summoned Entity"},autoDamage:true,entities:{[state.entityRef]:[t]},positions:{[state.entityRef]:loc(t)},lastEntityRef:state.entityRef});
       const elapsed=round-(state.spawnRound||0);
       if(state.lifetime&&elapsed>=state.lifetime){
         await runEffects(state.onExpire||[],ctx);
