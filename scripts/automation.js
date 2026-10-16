@@ -4,15 +4,16 @@
 export const EFFECT_SCHEMA = {
   damage:{label:"Apply damage",fields:["formula","damageType","targetMode","origin","radius","targetFilter"]},
   heal:{label:"Heal HP",fields:["formula","targetMode","origin","radius","targetFilter"]},
-  tempHp:{label:"Grant temporary HP",fields:["formula","targetMode","origin","radius","targetFilter"]},
+  tempHp:{label:"Grant temporary HP",fields:["formula","multiplierEntityRef","targetMode","origin","radius","targetFilter"]},
   applyElement:{label:"Apply element",fields:["elementId","targetMode","origin","radius","targetFilter"]},
   summon:{label:"Spawn assigned Actor",fields:["actorUuid","entityRef","quantity","lifetime","placement"],children:["onTick","onExpire"]},
   clearEntity:{label:"Clear Entity (assigned Actor)",fields:["entityRef","clearMode"]},
   detonateEntity:{label:"Detonate matching summoned entities",fields:["entityRef","searchRadius","radius","formula","damageType","targetFilter"]},
   zone:{label:"Create zone",fields:["elementId","radius","damageFormula","damageType","targetFilter"]},
   ability:{label:"Modify an ability",fields:["ability","amount","duration","targetMode","origin","radius","targetFilter"]},
-  resistance:{label:"Grant damage resistance",fields:["damageType","duration","targetMode","origin","radius","targetFilter"]},
+  resistance:{label:"Grant damage resistance",fields:["damageType","duration","untilTempHpGone","targetMode","origin","radius","targetFilter"]},
   removeEffects:{label:"Remove reaction effects",fields:["elementsToClear","targetMode","origin","radius","targetFilter"]},
+  annihilate:{label:"Annihilate Light/Dark effects (combat)",fields:["damageType"]},
   sequence:{label:"Sub-bracket / sequence",fields:["label"],children:["steps"]}
 };
 export const FIELD_OPTIONS = {
@@ -35,6 +36,7 @@ export const EFFECT_DEFAULTS = {
   ability:{type:"ability",ability:"str",amount:-1,duration:2,targetMode:"target",targetFilter:"all",origin:"target",radius:5},
   resistance:{type:"resistance",damageType:"fire",duration:2,targetMode:"target",targetFilter:"all",origin:"target",radius:5},
   removeEffects:{type:"removeEffects",elementsToClear:"light,dark",targetMode:"area",targetFilter:"all",origin:"target",radius:9999},
+  annihilate:{type:"annihilate",damageType:"force"},
   sequence:{type:"sequence",label:"Sub-bracket",steps:[]}
 };
 export function defaultEffect(type){return foundry.utils.deepClone(EFFECT_DEFAULTS[type]||{type});}
@@ -102,7 +104,23 @@ export function createAutomation({M,el,setElement,damage,ensureCollective}) {
       return;
     }
     if(f.type==="heal"||f.type==="tempHp"){
-      for(const t of resolveTargets(f,c)){const value=await rollAmount(f.formula||"1d4",c.sourceActor);await updateHeal(t,value,f.type==="tempHp");c.affected.add(t)}
+      for(const t of resolveTargets(f,c)){
+        let value=await rollAmount(f.formula||"1d4",c.sourceActor);
+        if(f.multiplierEntityRef){
+          const units=tokens().filter(x=>x.document?.getFlag(M,"summoned")?.entityRef===f.multiplierEntityRef);
+          const side=ownSide(c);
+          value*=units.filter(x=>side===undefined||x.document?.disposition===side).length;
+        }
+        if(value<=0)continue;
+        await updateHeal(t,value,f.type==="tempHp");
+        if(f.type==="tempHp"){
+          const old=t.actor.getFlag(M,"tempHpHistory")||[];
+          await t.actor.setFlag(M,"tempHpHistory",[...old,{
+            amount:value,elements:[c.firstElement,c.secondElement],reactionId:c.reaction?.id||""
+          }]);
+        }
+        c.affected.add(t);
+      }
       return;
     }
     if(f.type==="applyElement"){
@@ -117,10 +135,37 @@ export function createAutomation({M,el,setElement,damage,ensureCollective}) {
         await t.actor.createEmbeddedDocuments("ActiveEffect",[{
           name:"Elemental Reaction: "+(c.reaction?.name||f.type),img:"icons/svg/aura.svg",
           origin:c.sourceActor?.uuid||null,changes:[change],
-          duration:{rounds:Math.max(1,Number(f.duration)||2),startRound:game.combat?.round||0,startTurn:game.combat?.turn||0},
-          flags:{[M]:{reactionId:c.reaction?.id||"",elements:[c.firstElement,c.secondElement],effectType:f.type}}
+          duration:f.untilTempHpGone?{}:{rounds:Math.max(1,Number(f.duration)||2),startRound:game.combat?.round||0,startTurn:game.combat?.turn||0},
+          flags:{[M]:{reactionId:c.reaction?.id||"",elements:[c.firstElement,c.secondElement],effectType:f.type,untilTempHpGone:!!f.untilTempHpGone}}
         }]);c.affected.add(t);
       }
+      return;
+    }
+    if(f.type==="annihilate"){
+      const all=game.combat?.combatants?.size?
+        [...new Map(game.combat.combatants.map(x=>x.actor).filter(Boolean).map(a=>[a.uuid,a])).values()]:
+        [...new Map(tokens().map(t=>t.actor).filter(Boolean).map(a=>[a.uuid,a])).values()];
+      let total=0;
+      for(const actor of all){
+        const effects=[...actor.effects].filter(a=>a.getFlag(M,"reactionId")&&
+          a.getFlag(M,"elements")?.some(x=>x==="light"||x==="dark"));
+        for(const effect of effects)for(const change of effect.changes||[]){
+          if(/^system.abilities.(str|dex|con|int|wis|cha).value$/.test(change.key))
+            total+=Math.abs(Number(change.value)||0);
+        }
+        const history=actor.getFlag(M,"tempHpHistory")||[];
+        const remove=history.filter(x=>x.elements?.some(y=>y==="light"||y==="dark"));
+        const keep=history.filter(x=>!x.elements?.some(y=>y==="light"||y==="dark"));
+        const totalGranted=remove.reduce((n,x)=>n+(Number(x.amount)||0),0);
+        total+=totalGranted;
+        if(effects.length)await actor.deleteEmbeddedDocuments("ActiveEffect",effects.map(e=>e.id));
+        if(remove.length){
+          const hp=actor.system?.attributes?.hp;
+          if(hp?.temp>0)await actor.update({"system.attributes.hp.temp":Math.max(0,Number(hp.temp)-totalGranted)});
+          await actor.setFlag(M,"tempHpHistory",keep);
+        }
+      }
+      if(total>0&&c.targetToken){await damage(c.sourceActor,c.targetToken,String(total),f.damageType||"force");c.affected.add(c.targetToken)}
       return;
     }
     if(f.type==="removeEffects"){
@@ -216,6 +261,11 @@ export function createAutomation({M,el,setElement,damage,ensureCollective}) {
       }
     }
   }
+  async function cleanupShieldsOnTempLoss(actor){
+    if(!game.user.isGM||Number(actor?.system?.attributes?.hp?.temp)>0)return;
+    const ids=[...actor.effects].filter(e=>e.getFlag(M,"untilTempHpGone")).map(e=>e.id);
+    if(ids.length)await actor.deleteEmbeddedDocuments("ActiveEffect",ids);
+  }
   function variantMatches(v,c){
     if(!v.enabled||!Array.isArray(v.elements)||v.elements.length!==2)return false;
     if([...(v.elements||[])].sort().join("|")!==[c.firstElement,c.secondElement].sort().join("|"))return false;
@@ -228,5 +278,5 @@ export function createAutomation({M,el,setElement,damage,ensureCollective}) {
     if(type==="targetElement")return c.targetToken?.document?.getFlag(M,"appliedElement")===value;
     return false;
   }
-  return {runEffects,makeContext,tickEntities,variantMatches,resolveTargets,rollAmount};
+  return {runEffects,makeContext,tickEntities,variantMatches,resolveTargets,rollAmount,cleanupShieldsOnTempLoss};
 }
