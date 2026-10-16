@@ -39,3 +39,21 @@
 .ter-builder .ter-inline-check input{width:auto}
 .ter-builder .ter-builder-footer{display:flex;justify-content:flex-end;gap:.75rem;position:sticky;bottom:0;padding:.7rem 0;background:var(--color-bg,transparent);backdrop-filter:blur(6px)}
 .ter-builder .ter-builder-footer [data-op=delete]{margin-right:auto}
+
+
+/* GM-approved single-target reaction rolls in the Foundry chat log. */
+.ter-reaction-damage-control{
+  margin-top:.55rem;
+  padding:.6rem .7rem;
+  border:1px solid var(--color-border-light-primary,#8888);
+  border-radius:7px;
+  background:rgba(90,130,175,.08);
+}
+.ter-reaction-damage-control p{margin:0 0 .45rem;line-height:1.35}
+.ter-reaction-damage-control .ter-reaction-apply-damage{
+  display:block;width:100%;margin:.35rem 0 0;
+  padding:.35rem .6rem;font-weight:700;
+}
+.ter-reaction-damage-control .ter-reaction-damage-applied{
+  margin:0;font-weight:700;
+}
