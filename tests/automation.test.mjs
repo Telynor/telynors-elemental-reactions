@@ -5,7 +5,7 @@ const source=readFileSync(new URL("../scripts/automation.js",import.meta.url),"u
 globalThis.foundry={utils:{deepClone:structuredClone}};
 globalThis.game={user:{isGM:true},dice3d:null,combat:null};
 globalThis.ui={notifications:{warn:()=>{}}};
-const {createAutomation,EFFECT_SCHEMA,defaultEffect,findAdjacentSpawnPosition,shouldUseManualDamage}=await import("data:text/javascript;charset=utf-8,"+encodeURIComponent(source));
+const {createAutomation,EFFECT_SCHEMA,defaultEffect,findAdjacentSpawnPosition,footprintsTouch,perEntityDice,shouldUseManualDamage}=await import("data:text/javascript;charset=utf-8,"+encodeURIComponent(source));
 
 function setup(){
   const actor={uuid:"Actor.source",system:{attributes:{hp:{value:10,max:20,temp:0}}}};
@@ -244,4 +244,69 @@ test("summon lifecycle direct damage is always automatic and never creates appro
   await engine.tickEntities();
   assert.deepEqual(events,["bud:acid"]);
   assert.equal(queued.length,0);
+});
+
+
+test("Enkindle only counts actual bordering footprints (including corners) around Large target",()=>{
+  const wolf={x:200,y:200,width:200,height:200};
+  assert.equal(footprintsTouch(wolf,{x:400,y:200,width:100,height:100}),true,"right edge");
+  assert.equal(footprintsTouch(wolf,{x:100,y:100,width:100,height:100}),true,"diagonal corner");
+  assert.equal(footprintsTouch(wolf,{x:250,y:400,width:100,height:100}),true,"bottom edge");
+  assert.equal(footprintsTouch(wolf,{x:500,y:200,width:100,height:100}),false,"one full cell gap");
+  assert.equal(footprintsTouch(wolf,{x:250,y:250,width:100,height:100}),false,"inside the wolf is overlap, not touching");
+});
+test("Enkindle rolls one independently randomized die per consumed Rimebud",()=>{
+  assert.equal(perEntityDice("1d4",1),"1d4");
+  assert.equal(perEntityDice("1d4",3),"3d4");
+  assert.equal(perEntityDice("2d6+1",4),"8d6+4");
+  assert.equal(perEntityDice("1d8+@mod",2),"(1d8+@mod) + (1d8+@mod)");
+  assert.equal(perEntityDice("1d4",0),"0");
+});
+test("Enkindle consumes only touching Rimebuds and deals exactly N configured dice to the trigger target",async()=>{
+  const {actor,target,events,deleted,addToken}=setup();
+  target.document.x=200;target.document.y=200;target.document.width=2;target.document.height=2;
+  target.w=200;target.h=200;target.center={x:300,y:300};
+  let i=0;
+  const bud=(x,y,ref="rimebud")=>{
+    const id="bud"+(++i);
+    const doc={id,x,y,width:1,height:1,uuid:"Scene."+id,disposition:1,
+      getFlag:(scope,key)=>key==="summoned"?{entityRef:ref}:null};
+    const token={id,w:100,h:100,center:{x:x+50,y:y+50},actor,document:doc};
+    doc.object=token;addToken(token);
+    return token;
+  };
+  bud(100,200);bud(400,300);bud(100,100); // 3 adjacent
+  bud(500,200); // 1 square farther away: not touching
+  bud(200,100,"another-summon"); // touching, but not a Rimebud
+  let manualRequests=0;
+  const engine=createAutomation({M:"test",el:()=>({color:"#fff"}),
+    setElement:async()=>{},damage:async(a,t,formula,type)=>events.push([t.id,formula,type]),
+    queueManualDamage:async()=>{manualRequests++}});
+  const c=engine.makeContext({sourceActor:actor,targetToken:target,firstElement:"fire",secondElement:"nature",
+    reaction:{name:"Enkindle",id:"fire-nature"}});
+  await engine.runEffects([{type:"detonateEntity",entityRef:"rimebud",formula:"1d8",damageType:"fire"}],c);
+  assert.deepEqual(deleted,["bud1","bud2","bud3"]);
+  assert.deepEqual(events,[["target","3d8","fire"]]);
+  assert.equal(manualRequests,0,"Enkindle damage should apply immediately, without a GM approval prompt");
+});
+test("Enkindle does not apply damage or delete anything when no Rimebuds touch target",async()=>{
+  const {actor,target,deleted,events,addToken}=setup();
+  const doc={id:"bud",x:300,y:100,width:1,height:1,getFlag:()=>({entityRef:"rimebud"})};
+  addToken({id:"bud",actor,center:{x:350,y:150},w:100,h:100,document:doc});
+  const engine=createAutomation({M:"test",el:()=>({color:"#fff"}),
+    setElement:async()=>{},damage:async(a,t,formula,type)=>events.push(type)});
+  await engine.runEffects([{type:"detonateEntity",entityRef:"rimebud",formula:"1d12",damageType:"fire"}],
+    engine.makeContext({sourceActor:actor,targetToken:target}));
+  assert.deepEqual(events,[]);
+  assert.deepEqual(deleted,[]);
+});
+test("Rimebud placement prefers touching grid squares before more distant spaces",()=>{
+  const wolf={x:200,y:200,width:200,height:200};
+  for(const rng of [()=>0,()=>.1,()=>.25,()=>.5,()=>.75,()=>.9999]){
+    const pos=findAdjacentSpawnPosition({target:wolf,spawnWidth:100,spawnHeight:100,
+      occupants:[wolf],gridSize:100,gridDistance:5,maxFeet:5,
+      sceneRect:{x:0,y:0,width:700,height:700},rng});
+    assert.ok(pos);
+    assert.equal(footprintsTouch(wolf,{...pos,width:100,height:100}),true);
+  }
 });
