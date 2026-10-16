@@ -310,3 +310,23 @@ test("Rimebud placement prefers touching grid squares before more distant spaces
     assert.equal(footprintsTouch(wolf,{...pos,width:100,height:100}),true);
   }
 });
+
+
+test("Enkindle also consumes Rhimebud spelling and custom Actor reference from Ice+Nature",async()=>{
+  const {actor,target,events,deleted,addToken}=setup();
+  target.document.x=200;target.document.y=200;target.document.width=2;target.document.height=2;
+  target.w=200;target.h=200;
+  const make=(id,x,y,state)=>{
+    const doc={id,x,y,width:1,height:1,getFlag:(m,k)=>k==="summoned"?state:null};
+    addToken({id,w:100,h:100,center:{x:x+50,y:y+50},actor,document:doc});
+  };
+  make("spelling",100,200,{entityRef:"rhimebud"});
+  make("custom",400,200,{entityRef:"Dire Wolf Seed",reactionId:"ice-nature",firstElement:"ice",secondElement:"nature"});
+  make("wrong",200,100,{entityRef:"other",reactionId:"fire-dark",firstElement:"fire",secondElement:"dark"});
+  const engine=createAutomation({M:"test",el:()=>({color:"#fff"}),
+    setElement:async()=>{},damage:async(a,t,formula,type)=>events.push({id:t.id,formula,type})});
+  await engine.runEffects([{type:"detonateEntity",entityRef:"rimebud",formula:"1d6",damageType:"fire"}],
+    engine.makeContext({sourceActor:actor,targetToken:target}));
+  assert.deepEqual(deleted,["spelling","custom"]);
+  assert.deepEqual(events,[{id:"target",formula:"2d6",type:"fire"}]);
+});
