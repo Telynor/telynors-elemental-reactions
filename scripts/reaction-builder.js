@@ -13,9 +13,9 @@ export function createReactionBuilder({M,get,cp}) {
     quantity:"Number to create",lifetime:"Lifetime (combat rounds, 0 = indefinite)",
     placement:"Spawn near",clearMode:"Clear scope",ability:"Ability",amount:"Ability change (+/-)",
     duration:"Duration (rounds)",elementsToClear:"Elements to clear (comma-separated)",
-    damageFormula:"Zone damage formula (optional)",label:"Bracket title"
+    damageFormula:"Zone damage formula (optional)",label:"Bracket title",searchRadius:"Chain search radius (feet)",multiplierEntityRef:"Multiply by active entities (reference)",untilTempHpGone:"Keep resistance only while temporary HP remains",excludeOriginEntity:"Exclude the assigned entity itself"
   };
-  const numberFields=new Set(["radius","quantity","lifetime","amount","duration"]);
+  const numberFields=new Set(["radius","quantity","lifetime","amount","duration","searchRadius"]);const checkboxFields=new Set(["untilTempHpGone","excludeOriginEntity"]);
   function valuesFor(name){
     if(FIELD_OPTIONS[name])return FIELD_OPTIONS[name];
     if(name==="elementId")return get("elements").map(e=>[e.id,e.name]);
@@ -26,6 +26,7 @@ export function createReactionBuilder({M,get,cp}) {
     const value=f[name]??defaultEffect(f.type)[name]??"";
     const opts=valuesFor(name);
     const attr=' data-field="'+html(name)+'" data-path="'+html(encodeURIComponent(JSON.stringify(path)))+'"';
+    if(checkboxFields.has(name))return '<label class="ter-inline-check"><input type="checkbox"'+attr+(value===true?" checked":"")+'> '+html(fieldLabels[name])+'</label>';
     if(opts)return '<label>'+html(fieldLabels[name]||name)+'<select'+attr+'>'+
       opts.map(([v,label])=>'<option value="'+html(v)+'"'+(String(value)===String(v)?" selected":"")+'>'+html(label)+'</option>').join("")+'</select></label>';
     if(name==="actorUuid")return '<label class="ter-actor-drop" data-drop-path="'+html(encodeURIComponent(JSON.stringify(path)))+'">'+
@@ -112,7 +113,7 @@ export function createReactionBuilder({M,get,cp}) {
       root.querySelector("[data-role=steps]")?.addEventListener("input",e=>{
         const x=e.target.closest("[data-field]");if(!x)return;
         const step=this.getStep(decode(x.dataset.path));if(!step)return;
-        step[x.dataset.field]=numberFields.has(x.dataset.field)?Number(x.value):x.value;
+        step[x.dataset.field]=checkboxFields.has(x.dataset.field)?x.checked:numberFields.has(x.dataset.field)?Number(x.value):x.value;
       });
       root.querySelector("[data-role=steps]")?.addEventListener("change",e=>{
         const el=e.target;
@@ -122,7 +123,7 @@ export function createReactionBuilder({M,get,cp}) {
           this.repaint();
         }else if(el.matches("[data-field]")){
           const step=this.getStep(decode(el.dataset.path));
-          if(step)step[el.dataset.field]=numberFields.has(el.dataset.field)?Number(el.value):el.value;
+          if(step)step[el.dataset.field]=checkboxFields.has(el.dataset.field)?el.checked:numberFields.has(el.dataset.field)?Number(el.value):el.value;
         }
       });
       root.querySelector("[data-role=steps]")?.addEventListener("click",e=>{
