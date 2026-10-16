@@ -5,13 +5,6 @@
  * changed. A GM selects a scene token later and applies that exact roll.
  * Automated area, summon, zone and detonation damage bypasses this module.
  */
-export function shouldPromptForDamage(step={},context={},targetCount=0) {
-  const mode=step.damageMode||"manual";
-  if(mode==="automatic"||context.autoDamage===true)return false;
-  if((step.targetMode||"target")==="area")return false;
-  return targetCount===1;
-}
-
 const escape=x=>String(x??"").replace(/[&<>"']/g,c=>({
   "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
 }[c]));
@@ -25,7 +18,7 @@ export function createManualDamageFlow({M,applyRolledDamage}) {
     if(!game.user?.isGM||!state)return false;
     // One responsible GM at a time; another GM can take over if that GM disconnects.
     const issuer=game.users?.get?.(state.issuedBy);
-    return !state.issuedBy||game.user.id===state.issuedBy||issuer?.active===false;
+    return !state.issuedBy||game.user.id===state.issuedBy||!issuer||issuer.active===false;
   }
   function findSceneToken(uuid){
     return canvas?.tokens?.placeables?.find(t=>t.actor&&t.document?.uuid===uuid)||null;
@@ -133,7 +126,17 @@ export function createManualDamageFlow({M,applyRolledDamage}) {
     button.disabled=true;
     try{
       const tokenId=await chooseTarget(state);
-      if(tokenId)await applyPendingDamage(message,tokenId);
+      if(tokenId&&await applyPendingDamage(message,tokenId)){
+        // Update the currently displayed card even when Foundry postpones a chat re-render.
+        const card=button.closest?.(".ter-reaction-damage-control");
+        if(card){
+          const latest=getState(game.messages?.get(message.id)||message);
+          const label=card.querySelector("p");
+          if(label){label.textContent="Applied "+latest.amount+" "+latest.damageType+
+            " damage to "+latest.appliedToName+".";label.className="ter-reaction-damage-applied";}
+          button.remove();
+        }
+      }
     }catch(error){console.error(M+" | Apply Damage dialog failed",error);ui.notifications?.error("Could not select reaction damage target.");}
     finally{button.disabled=false}
   }
@@ -141,7 +144,7 @@ export function createManualDamageFlow({M,applyRolledDamage}) {
     const state=getState(message);
     if(!state)return;
     const container=html.querySelector?.(".message-content")||html;
-    if(container.querySelector?.(".ter-reaction-damage-control"))return;
+    container.querySelector?.(".ter-reaction-damage-control")?.remove();
     const card=document.createElement("section");
     card.className="ter-reaction-damage-control";
     const label=document.createElement("p");
