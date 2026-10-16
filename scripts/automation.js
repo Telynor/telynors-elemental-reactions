@@ -42,6 +42,48 @@ export const EFFECT_DEFAULTS = {
   sequence:{type:"sequence",label:"Sub-bracket",steps:[]}
 };
 export function defaultEffect(type){return foundry.utils.deepClone(EFFECT_DEFAULTS[type]||{type});}
+
+/**
+ * Pick a random empty snapped grid position within reach of the edge of a token.
+ * Uses BOTH token footprints, not just their centers. Returns null if every
+ * legal position is occupied or off-scene; never overlaps the target as fallback.
+ * Pure helper exported for regression testing without a Foundry client.
+ */
+export function findAdjacentSpawnPosition({
+  target, spawnWidth, spawnHeight, occupants=[], gridSize=100,
+  gridDistance=5, maxFeet=5, sceneRect=null, rng=Math.random
+}) {
+  const size=Number(gridSize),feet=Number(gridDistance);
+  const tw=Number(target?.width),th=Number(target?.height);
+  const sw=Number(spawnWidth),sh=Number(spawnHeight);
+  if(!target||![size,feet,tw,th,sw,sh].every(Number.isFinite)||
+     Math.min(size,feet,tw,th,sw,sh)<=0)return null;
+  const near=maxFeet/feet*size, epsilon=0.001;
+  const rect=(x,y,w,h)=>({x,y,width:w,height:h});
+  const overlap=(a,b)=>a.x<b.x+b.width-epsilon&&a.x+a.width>b.x+epsilon&&
+    a.y<b.y+b.height-epsilon&&a.y+a.height>b.y+epsilon;
+  const rangeX=[Math.floor((target.x-sw-near)/size),Math.ceil((target.x+tw+near)/size)];
+  const rangeY=[Math.floor((target.y-sh-near)/size),Math.ceil((target.y+th+near)/size)];
+  const spaces=[];
+  for(let gx=rangeX[0];gx<=rangeX[1];gx++){
+    for(let gy=rangeY[0];gy<=rangeY[1];gy++){
+      const test=rect(gx*size,gy*size,sw,sh);
+      if(overlap(test,target))continue;
+      const dx=Math.max(target.x-(test.x+sw),test.x-(target.x+tw),0);
+      const dy=Math.max(target.y-(test.y+sh),test.y-(target.y+th),0);
+      if(Math.hypot(dx,dy)>near+epsilon)continue;
+      if(sceneRect&&(test.x<sceneRect.x-epsilon||test.y<sceneRect.y-epsilon||
+        test.x+sw>sceneRect.x+sceneRect.width+epsilon||
+        test.y+sh>sceneRect.y+sceneRect.height+epsilon))continue;
+      if(occupants.some(occupied=>occupied&&overlap(test,occupied)))continue;
+      spaces.push({x:test.x,y:test.y});
+    }
+  }
+  if(!spaces.length)return null;
+  const n=Number(rng());
+  return spaces[Math.max(0,Math.min(spaces.length-1,Math.floor((Number.isFinite(n)?n:0)*spaces.length)))];
+}
+
 export function createAutomation({M,el,setElement,damage,ensureCollective}) {
   const cp=x=>foundry.utils.deepClone(x);
   const tokens=()=>canvas?.tokens?.placeables||[];
@@ -220,10 +262,40 @@ export function createAutomation({M,el,setElement,damage,ensureCollective}) {
       const basis=(f.placement==="source"?tokenOfActor(c.sourceActor):c.targetToken)||c.targetToken;
       if(!basis)return;
       if(!c.entities[ref])c.entities[ref]=[];
+      const size=Number(canvas.grid?.size)||100;
+      const gridDistance=Number(canvas.scene?.grid?.distance)||5;
+      const doc=basis.document;
+      const footprint=tokenDoc=>({
+        x:Number(tokenDoc.x)||0,y:Number(tokenDoc.y)||0,
+        width:(Number(tokenDoc.width)||1)*size,height:(Number(tokenDoc.height)||1)*size
+      });
+      // Grab the Actor's configured token size before choosing a placement.
+      const prototype=await actor.getTokenDocument({x:0,y:0});
+      const tokenWidth=Math.max(1,Number(prototype.width)||1)*size;
+      const tokenHeight=Math.max(1,Number(prototype.height)||1)*size;
+      const targetBox={
+        x:Number(doc.x)||0,y:Number(doc.y)||0,
+        width:Number(basis.w)||footprint(doc).width,
+        height:Number(basis.h)||footprint(doc).height
+      };
+      // Scene token documents include hidden and currently unrendered tokens.
+      // Reserve newly chosen spaces too, preventing simultaneous summons overlapping.
+      const occupied=[...canvas.scene.tokens.contents.map(footprint)];
+      const bounds=canvas.dimensions?.sceneRect||null;
       for(let i=0;i<count;i++){
-        const size=canvas.grid?.size||100;
-        const td=await actor.getTokenDocument({x:basis.document.x+size*(1+i%3),y:basis.document.y+size*Math.floor(i/3)});
-        const [doc]=await canvas.scene.createEmbeddedDocuments("Token",[td.toObject()]);
+        const position=findAdjacentSpawnPosition({
+          target:targetBox,spawnWidth:tokenWidth,spawnHeight:tokenHeight,
+          occupants:occupied,gridSize:size,gridDistance,
+          maxFeet:5,sceneRect:bounds
+        });
+        if(!position){
+          ui.notifications?.warn("No unoccupied space within 5 feet of "+(basis.name||"the target")+" for "+actor.name+".");
+          break;
+        }
+        occupied.push({...position,width:tokenWidth,height:tokenHeight});
+        const td=await actor.getTokenDocument(position);
+        const [created]=await canvas.scene.createEmbeddedDocuments("Token",[td.toObject()]);
+        const doc=created;
         await doc.setFlag(M,"summoned",{
           entityRef:ref,actorUuid:actor.uuid,sourceActorUuid:c.sourceActor?.uuid||null,
           reactionId:c.reaction?.id||"",firstElement:c.firstElement,secondElement:c.secondElement,
