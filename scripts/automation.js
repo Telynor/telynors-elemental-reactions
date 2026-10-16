@@ -8,7 +8,7 @@ export const EFFECT_SCHEMA = {
   applyElement:{label:"Apply element",fields:["elementId","targetMode","origin","entityRef","radius","targetFilter"]},
   summon:{label:"Spawn assigned Actor",fields:["actorUuid","entityRef","quantity","lifetime","placement"],children:["onTick","onExpire"]},
   clearEntity:{label:"Clear Entity (assigned Actor)",fields:["entityRef","clearMode"]},
-  detonateEntity:{label:"Detonate matching summoned entities",fields:["entityRef","searchRadius","radius","formula","damageType","targetFilter"]},
+  detonateEntity:{label:"Consume touching entities (count × dice)",fields:["entityRef","formula","damageType","targetMode","origin","radius","targetFilter"]},
   zone:{label:"Create zone",fields:["elementId","radius","damageFormula","damageType","targetFilter"]},
   ability:{label:"Modify an ability",fields:["ability","amount","duration","targetMode","origin","entityRef","radius","targetFilter"]},
   resistance:{label:"Grant damage resistance",fields:["damageType","duration","untilTempHpGone","targetMode","origin","entityRef","radius","targetFilter"]},
@@ -33,7 +33,7 @@ export const EFFECT_DEFAULTS = {
   applyElement:{type:"applyElement",elementId:"fire",targetMode:"target",targetFilter:"all",origin:"target",radius:5},
   summon:{type:"summon",actorUuid:"",entityRef:"rimebud",quantity:1,lifetime:2,placement:"target",onTick:[],onExpire:[]},
   clearEntity:{type:"clearEntity",entityRef:"rimebud",clearMode:"tracked"},
-  detonateEntity:{type:"detonateEntity",entityRef:"rimebud",searchRadius:5,radius:5,formula:"1d4",damageType:"fire",targetFilter:"all"},
+  detonateEntity:{type:"detonateEntity",entityRef:"rimebud",formula:"1d4",damageType:"fire",targetMode:"target",origin:"target",radius:5,targetFilter:"all"},
   zone:{type:"zone",elementId:"fire",radius:10,damageFormula:"",damageType:"fire",targetFilter:"all"},
   ability:{type:"ability",ability:"str",amount:-1,duration:2,targetMode:"target",targetFilter:"all",origin:"target",radius:5},
   resistance:{type:"resistance",damageType:"fire",duration:2,untilTempHpGone:false,targetMode:"target",targetFilter:"all",origin:"target",radius:5},
@@ -81,8 +81,46 @@ export function findAdjacentSpawnPosition({
     }
   }
   if(!spaces.length)return null;
+  // Prefer the immediate ring of touching cells, so an Enkindle triggered
+  // on the creature can consume the Rimebuds created beside it.
+  const adjacent=spaces.filter(p=>footprintsTouch(
+    {x:p.x,y:p.y,width:sw,height:sh},target));
+  const candidates=adjacent.length?adjacent:spaces;
   const n=Number(rng());
-  return spaces[Math.max(0,Math.min(spaces.length-1,Math.floor((Number.isFinite(n)?n:0)*spaces.length)))];
+  return candidates[Math.max(0,Math.min(candidates.length-1,Math.floor((Number.isFinite(n)?n:0)*candidates.length)))];
+}
+
+/**
+ * Check grid adjacency between token footprints, including diagonally touching
+ * corners. This checks actual rectangular bounds rather than token centers.
+ */
+export function footprintsTouch(a,b,tolerance=1){
+  if(!a||!b||![a.x,a.y,a.width,a.height,b.x,b.y,b.width,b.height].every(Number.isFinite))return false;
+  if(Math.min(a.width,a.height,b.width,b.height)<=0)return false;
+  const eps=Math.max(0,Number(tolerance)||0);
+  const overlaps=a.x<b.x+b.width-eps&&a.x+a.width>b.x+eps&&
+    a.y<b.y+b.height-eps&&a.y+a.height>b.y+eps;
+  if(overlaps)return false;
+  const dx=Math.max(a.x-(b.x+b.width),b.x-(a.x+a.width),0);
+  const dy=Math.max(a.y-(b.y+b.height),b.y-(a.y+a.height),0);
+  return dx<=eps&&dy<=eps;
+}
+
+/** Scale the per-entity dice, never multiply one rolled result by entity count. */
+export function perEntityDice(formula,count){
+  const n=Math.max(0,Math.floor(Number(count)||0));
+  if(!n)return "0";
+  const original=String(formula||"1d4").trim();
+  if(!original)return "0";
+  // Standard NdX with an optional flat modifier: 3 buds × 1d4 = 3d4.
+  const simple=original.match(/^(\d*)d(\d+|%|F)(?:\s*([+-])\s*(\d+))?$/i);
+  if(simple){
+    const dice=(Number(simple[1]||1)*n)+"d"+simple[2];
+    const modifier=simple[3]?(simple[3]==="-"?-1:1)*Number(simple[4])*n:0;
+    return dice+(modifier>0?"+"+modifier:modifier<0?String(modifier):"");
+  }
+  // For complex expressions, roll once independently per consumed entity.
+  return Array.from({length:Math.min(n,100)},()=> "(" + original + ")").join(" + ");
 }
 
 export function shouldUseManualDamage(step={},context={},targetCount=0){
@@ -331,25 +369,38 @@ export function createAutomation({M,el,setElement,damage,ensureCollective,queueM
       return;
     }
     if(f.type==="detonateEntity"){
-      const ref=f.entityRef||"rimebud",near=radiusPx(f.searchRadius||5);
-      const start=loc(c.targetToken);
-      if(!start)return;
-      const remaining=tokens().filter(t=>t.document?.getFlag(M,"summoned")?.entityRef===ref);
-      const burst=[],queue=[start];
-      while(queue.length&&burst.length<50){
-        const point=queue.shift();
-        for(const t of remaining){
-          if(burst.includes(t)||!loc(t)||dist(point,loc(t))>near)continue;
-          burst.push(t);queue.push(loc(t));
-        }
+      // Match actual token bounding boxes, not token center-to-center distances.
+      // A Large creature may have Rimebuds at any point along its perimeter.
+      const ref=String(f.entityRef||"rimebud").trim();
+      const grid=Number(canvas.grid?.size)||100;
+      const footprint=doc=>({
+        x:Number(doc?.x)||0,y:Number(doc?.y)||0,
+        width:(Number(doc?.width)||1)*grid,height:(Number(doc?.height)||1)*grid
+      });
+      const targetDoc=c.targetToken?.document||c.targetToken;
+      if(!targetDoc)return;
+      const boundary=footprint(targetDoc);
+      const docs=canvas.scene?.tokens?.contents||tokens().map(t=>t.document);
+      const touching=docs.filter(doc=>doc?.id&&doc.id!==targetDoc.id&&
+        doc.getFlag?.(M,"summoned")?.entityRef===ref&&
+        footprintsTouch(footprint(doc),boundary));
+      if(!touching.length){
+        console.log(M+" | Enkindle: no touching "+ref+" entities to consume.");
+        return;
       }
-      for(const entity of burst){
-        const scoped=makeContext({...c,entities:{...c.entities,[ref]:[entity]},positions:{...c.positions,[ref]:loc(entity)},lastEntityRef:ref});
-        await executeStep({type:"damage",formula:f.formula||"1d4",damageType:f.damageType||"fire",
-          targetMode:"area",origin:"entity",entityRef:ref,radius:f.radius||5,targetFilter:f.targetFilter||"all"},scoped,depth+1);
-        for(const t of scoped.affected)c.affected.add(t);
-        if(canvas.scene.tokens.get(entity.document.id))await canvas.scene.deleteEmbeddedDocuments("Token",[entity.document.id]);
-      }
+      // Consume first; failure to delete means no damage and no false count.
+      const ids=touching.map(doc=>doc.id);
+      const deleted=await canvas.scene.deleteEmbeddedDocuments("Token",ids);
+      const count=Array.isArray(deleted)?deleted.length:ids.length;
+      if(!count)return;
+      c.entities[ref]=(c.entities[ref]||[]).filter(t=>!ids.includes(t.document?.id));
+      const formula=perEntityDice(f.formula||"1d4",count);
+      console.log(M+" | Enkindle consumed "+count+" "+ref+" entities; rolling "+formula+" "+(f.damageType||"fire")+".");
+      // Automatic damage: this is an entity-triggered reaction, not a
+      // direct-hit manual damage approval prompt.
+      await executeStep({type:"damage",formula,damageType:f.damageType||"fire",
+        damageMode:"automatic",targetMode:f.targetMode||"target",origin:f.origin||"target",
+        radius:Number(f.radius)||5,targetFilter:f.targetFilter||"all"},c,depth+1);
       return;
     }
     if(f.type==="clearEntity"){
