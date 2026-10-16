@@ -15,6 +15,12 @@ Supported builder action types: damage, healing, temporary HP, element applicati
 
 Each damage/healing/effect step can choose the triggering creature, source, assigned entity, or a radius around the target/source/entity. Area targeting can include all creatures, enemies, or allies (based on token disposition relative to the source token).
 
+### Chat approval for direct reaction damage
+
+When a reaction performs **direct damage against one creature**, its damage action defaults to **Roll to chat + GM selects creature**. Foundry posts the actual roll and an **Apply Damage** button, but **does not change HP when the roll is posted**. A GM clicks the button, selects any creature token in the current scene (the currently targeted creature is suggested), and confirms. The original roll is applied once to the selected creature, with the damage type preserved; the chat card then shows who received the damage. The same roll cannot be applied again.
+
+The builder's damage action also offers **Immediately apply damage** for a direct creature. Damage to an **area**, and automatic events such as **Rimebud's each-round pulses / expiration**, **Enkindle explosions**, and **zone damage**, still apply automatically. No chat approval is needed for them.
+
 For **Rimebud**, add a **Spawn assigned Actor** step and drag an Actor from the Actors sidebar/compendium into its Actor field. The token spawns in a random **unoccupied grid position within 5 feet of the target’s edge**, calculated using both token footprints and the scene bounds. If no legal position is available, the summon is skipped with a warning instead of overlapping a creature. Reaction names display once over the original target even when a reaction summons or damages several entities. Name the entity (e.g. `rimebud`), set quantity and lifetime, then optionally add nested actions to **Every initiative 0** and **When summon expires**. The entity reference works in **Clear Entity** and subsequent area actions. Clearing preserves its last position for later actions in the same sequence.
 
 Variants use the same editor. Give a variant a matching pair of elements, a priority, an enabled state, and an optional condition. An eligible higher-priority variant takes precedence over the normal reaction. Unmatched variants never fire.
