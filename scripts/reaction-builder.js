@@ -69,6 +69,9 @@ export function createReactionBuilder({M,get,cp}) {
           enabled:true,priority:10,condition:{type:"always",value:""}
         };
       }
+      if(!Array.isArray(this.draft.effects))this.draft.effects=[];
+      if(!this.draft.elements?.length)this.draft.elements=[get("elements")[0]?.id||"fire",get("elements")[1]?.id||"ice"];
+      if(!this.draft.text)this.draft.text={mode:"gradient",direction:"right",solid:"#ffffff"};
       return {elements:cp(get("elements")),draft:this.draft,isVariant:this.kind==="variant",isNew:!this.recordId};
     }
     listAt(path){
