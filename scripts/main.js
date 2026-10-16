@@ -5,6 +5,7 @@ const DEFAULT_DAMAGE_TYPES={fire:["fire","acid"],ice:["cold","psychic"],nature:[
 const E=[["fire","Fire","#ff6a2a"],["ice","Ice","#74e8ff"],["nature","Nature","#62df72"],["wind","Wind","#75e8cf"],["light","Light","#ffe866"],["dark","Dark","#9d68e8"],["physical","Physical","#d9d9d9"],["divine","Divine","#ffffff"]].map(([id,name,color])=>({id,name,color,glow:color,icon:"icons/svg/aura.svg",description:"",damageTypes:DEFAULT_DAMAGE_TYPES[id]||[]}));
 const P=[["fire","ice","Frostburn"],["fire","nature","Enkindle"],["fire","wind","Vortex"],["fire","light","Sunshield"],["fire","dark","Sunder"],["ice","nature","Rimebud"],["ice","wind","Vortex"],["ice","light","Ice Aegis"],["ice","dark","Blizzard"],["nature","wind","Vortex"],["nature","light","Spriteshield"],["nature","dark","Prana"],["wind","light","Vortex"],["wind","dark","Vortex"],["light","dark","Annihilate"]];
 const REACTION_EFFECTS={
+  frostburn:[{type:"resistanceShift",damageType:"@trigger",duration:2,targetMode:"target"}],
   enkindle:[{type:"detonateEntity",entityRef:"rimebud",searchRadius:5,radius:5,formula:"1d4",damageType:"fire",targetFilter:"all"}],
   rimebud:[{type:"summon",actorUuid:"",entityRef:"rimebud",quantity:1,lifetime:2,placement:"target",
     onTick:[{type:"damage",formula:"1d4",damageType:"acid",targetMode:"area",origin:"entity",entityRef:"rimebud",radius:5,targetFilter:"all",excludeOriginEntity:true}],
@@ -21,8 +22,8 @@ const REACTION_EFFECTS={
   annihilate:[{type:"annihilate",damageType:"force"}]
 };
 const PAIR_EFFECTS={
-  "fire|wind":[{type:"applyElement",elementId:"fire",targetMode:"area",origin:"target",radius:10,targetFilter:"all"}],
-  "ice|wind":[{type:"applyElement",elementId:"ice",targetMode:"area",origin:"target",radius:10,targetFilter:"all"}],
+  "fire|wind":[{type:"applyElement",elementId:"fire",targetMode:"area",origin:"target",radius:10,targetFilter:"all"},{type:"resistanceShift",damageType:"fire,acid",duration:2,targetMode:"area",origin:"target",radius:10,targetFilter:"all"}],
+  "ice|wind":[{type:"applyElement",elementId:"ice",targetMode:"area",origin:"target",radius:10,targetFilter:"all"},{type:"resistanceShift",damageType:"cold,psychic",duration:2,targetMode:"area",origin:"target",radius:10,targetFilter:"all"}],
   "nature|wind":[{type:"heal",formula:"1d4",targetMode:"source"}],
   "light|wind":[{type:"tempHp",formula:"2d4",targetMode:"target"},{type:"resistance",damageType:"thunder",duration:2,targetMode:"target"}],
   "dark|wind":[{type:"ability",ability:"cha",amount:-1,duration:2,targetMode:"target"}]
