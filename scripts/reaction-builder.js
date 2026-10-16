@@ -7,7 +7,7 @@ export function createReactionBuilder({M,get,cp}) {
   const html=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const types=Object.entries(EFFECT_SCHEMA);
   const fieldLabels={
-    formula:"Dice formula",damageType:"D&D damage type",elementId:"Element",targetMode:"Apply to",
+    formula:"Dice formula",damageType:"D&D damage type",damageMode:"Damage application",elementId:"Element",targetMode:"Apply to",
     origin:"Area centered on",radius:"Radius (feet)",targetFilter:"Target creatures",
     actorUuid:"Assigned Actor UUID (drop an Actor below)",entityRef:"Entity variable / name",
     quantity:"Number to create",lifetime:"Lifetime (combat rounds, 0 = indefinite)",
