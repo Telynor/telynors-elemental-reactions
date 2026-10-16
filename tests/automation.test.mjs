@@ -141,3 +141,46 @@ test("when all free spaces are off-scene or occupied, placement returns null rat
     occupants:[target],gridSize:100,gridDistance:5,
     sceneRect:{x:0,y:0,width:300,height:300}}),null);
 });
+
+test("Rimebud reaction callout is emitted once, not once for every affected token",()=>{
+  const main=readFileSync(new URL("../scripts/main.js",import.meta.url),"utf8");
+  const match=main.match(/async function runReaction\(r,c\)\{([\s\S]*?)\}\s*function layer\(\)/);
+  assert.ok(match,"The reaction orchestrator must exist");
+  const body=match[1];
+  assert.match(body,/callout\(c\.targetToken,r,c\)/);
+  assert.doesNotMatch(body,/for\s*\(const\s+t\s+of\s+ctx\.affected\).*callout\(/);
+});
+test("summon automation respects Large target and blocked adjacent grid locations end-to-end",async()=>{
+  const {actor,target,addToken}=setup();
+  target.document.x=200;target.document.y=200;target.document.width=2;target.document.height=2;
+  target.w=200;target.h=200;target.center={x:300,y:300};
+  // A 10x10-foot dire wolf with one blocked square to the east.
+  const blocker={id:"blocker",actor,center:{x:450,y:250},w:100,h:100,
+    document:{id:"blocker",uuid:"Scene.token.blocker",x:400,y:200,width:1,height:1,disposition:1,getFlag:()=>null}};
+  addToken(blocker);
+  const entityActor={documentName:"Actor",uuid:"Actor.rimebud",name:"Rimebud",
+    async getTokenDocument(pos){return {width:1,height:1,toObject:()=>({...pos,width:1,height:1,name:"Rimebud"})}}};
+  globalThis.fromUuid=async uuid=>uuid===entityActor.uuid?entityActor:actor;
+  let placement=null;
+  canvas.dimensions={sceneRect:{x:0,y:0,width:700,height:700}};
+  canvas.scene.createEmbeddedDocuments=async(type,docs)=>{
+    assert.equal(type,"Token");
+    placement=docs[0];
+    const token={id:"spawned",actor,center:{x:placement.x+50,y:placement.y+50},w:100,h:100};
+    const doc={id:"spawned",x:placement.x,y:placement.y,width:1,height:1,uuid:"Scene.token.spawned",disposition:1,object:token,
+      async setFlag(){},getFlag:()=>null};
+    token.document=doc;addToken(token);
+    return [doc];
+  };
+  const engine=createAutomation({M:"test",el:()=>({color:"#fff"}),
+    setElement:async()=>{},damage:async()=>{},ensureCollective:async()=>{}});
+  const context=engine.makeContext({sourceActor:actor,targetToken:target,
+    reaction:{id:"ice-nature",name:"Rimebud"},firstElement:"ice",secondElement:"nature"});
+  await engine.runEffects([{type:"summon",actorUuid:entityActor.uuid,entityRef:"rimebud",quantity:1,lifetime:2}],context);
+  assert.ok(placement,"The Rimebud must spawn");
+  const box={x:placement.x,y:placement.y,width:100,height:100};
+  const wolf={x:200,y:200,width:200,height:200};
+  assert.equal(intersects(box,wolf),false);
+  assert.equal(intersects(box,{x:400,y:200,width:100,height:100}),false);
+  assert.ok(minGap(box,wolf)<=100);
+});
