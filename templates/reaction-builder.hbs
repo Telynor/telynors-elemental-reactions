@@ -1,0 +1,40 @@
+<section class="ter-wizard ter-builder">
+  <header class="ter-builder-header"><div><h2>{{#if isVariant}}Variant Reaction Builder{{else}}Reaction Automation Builder{{/if}}</h2>
+  <p>Actions execute top-to-bottom: 1 → N. Each sub-bracket runs in its own order. Drag an Actor into any summon action.</p></div></header>
+  <div class="ter-two">
+    <label>First element<select name="a">{{#each elements}}<option value="{{id}}">{{name}}</option>{{/each}}</select></label>
+    <label>Second element<select name="b">{{#each elements}}<option value="{{id}}">{{name}}</option>{{/each}}</select></label>
+  </div>
+  <label>Reaction name<input name="name" placeholder="Rimebud, Frostburn, Immaculate..."></label>
+  {{#if isVariant}}
+    <fieldset class="ter-builder-condition"><legend>Variant priority &amp; conditions</legend>
+      <p>Matching, enabled variants override the standard reaction. Highest priority wins.</p>
+      <div class="ter-two"><label>Priority<input name="priority" type="number" step="1" value="10"></label>
+      <label>Condition<select name="conditionType">
+        <option value="always">Always for this element pair</option>
+        <option value="targetStatus">Target has status</option>
+        <option value="sourceStatus">Source has status</option>
+        <option value="targetHpBelow">Target HP below %</option>
+        <option value="sourceElement">Source currently uses element</option>
+        <option value="targetElement">Target has element</option>
+      </select></label></div>
+      <label>Condition value (status id, percent, or element id)<input name="conditionValue" placeholder="e.g. poisoned, 50, ice"></label>
+      <label class="ter-inline-check"><input name="enabled" type="checkbox" checked> Enable this variant</label>
+    </fieldset>
+  {{/if}}
+  <fieldset><legend>Reaction text</legend>
+    <div class="ter-two"><label>Text fill<select name="textMode"><option value="gradient">Element gradient</option><option value="solid">Solid</option><option value="element-gradient">Element gradient (legacy)</option></select></label>
+    <label>Direction<select name="direction"><option value="right">Left → Right</option><option value="left">Right → Left</option><option value="up">Bottom → Top</option><option value="down">Top → Bottom</option></select></label></div>
+    <label>Solid text color<input name="solid" type="color" value="#ffffff"></label>
+    <div class="ter-preview">REACTION</div>
+  </fieldset>
+  <fieldset class="ter-builder-stack"><legend>Effect sequence</legend>
+    <p>Steps run in listed order, waiting for each one to complete. Use a <strong>Sub-bracket</strong> to group actions, or add <strong>on tick</strong> and <strong>on expiry</strong> steps inside a summoned entity.</p>
+    <div data-role="steps"></div>
+    <button type="button" data-op="add-root"><i class="fa-solid fa-plus"></i> Add effect step</button>
+  </fieldset>
+  <footer class="ter-builder-footer">
+    {{#unless isNew}}<button type="button" data-op="delete"><i class="fa-solid fa-trash"></i> Delete {{#if isVariant}}Variant{{else}}Reaction{{/if}}</button>{{/unless}}
+    <button type="button" data-op="save"><i class="fa-solid fa-floppy-disk"></i> Save automation</button>
+  </footer>
+</section>
