@@ -9,7 +9,7 @@ const {createAutomation,EFFECT_SCHEMA,defaultEffect}=await import("data:text/jav
 function setup(){
   const actor={uuid:"Actor.source",system:{attributes:{hp:{value:10,max:20,temp:0}}}};
   const target={id:"target",name:"Target",center:{x:120,y:100},w:100,h:100,actor,
-    document:{id:"target",uuid:"Scene.token.target",disposition:1}};
+    document:{id:"target",uuid:"Scene.token.target",x:100,y:100,disposition:1,getFlag:()=>null}};
   let sceneTokens=[target],deleted=[];
   globalThis.canvas={tokens:{get placeables(){return sceneTokens}},grid:{size:100},
     scene:{grid:{distance:5},tokens:{get:id=>sceneTokens.find(t=>t.document.id===id)?.document},
