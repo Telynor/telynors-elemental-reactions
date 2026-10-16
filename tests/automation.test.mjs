@@ -5,7 +5,7 @@ const source=readFileSync(new URL("../scripts/automation.js",import.meta.url),"u
 globalThis.foundry={utils:{deepClone:structuredClone}};
 globalThis.game={user:{isGM:true},dice3d:null,combat:null};
 globalThis.ui={notifications:{warn:()=>{}}};
-const {createAutomation,EFFECT_SCHEMA,defaultEffect,findAdjacentSpawnPosition}=await import("data:text/javascript;charset=utf-8,"+encodeURIComponent(source));
+const {createAutomation,EFFECT_SCHEMA,defaultEffect,findAdjacentSpawnPosition,shouldUseManualDamage}=await import("data:text/javascript;charset=utf-8,"+encodeURIComponent(source));
 
 function setup(){
   const actor={uuid:"Actor.source",system:{attributes:{hp:{value:10,max:20,temp:0}}}};
@@ -30,7 +30,7 @@ test("nested effects execute in sequence from one to N",async()=>{
   await engine.runEffects([
     {type:"applyElement",elementId:"fire"},
     {type:"sequence",steps:[
-      {type:"damage",formula:"1d4",damageType:"fire"},
+      {type:"damage",formula:"1d4",damageType:"fire",damageMode:"automatic"},
       {type:"applyElement",elementId:"ice"}]}
   ],c);
   assert.deepEqual(events,["element:target:fire","damage:target:1d4:fire","element:target:ice"]);
@@ -183,4 +183,65 @@ test("summon automation respects Large target and blocked adjacent grid location
   assert.equal(intersects(box,wolf),false);
   assert.equal(intersects(box,{x:400,y:200,width:100,height:100}),false);
   assert.ok(minGap(box,wolf)<=100);
+});
+
+
+test("damage defaults to a manual chat roll for exactly one directly affected creature",async()=>{
+  const {actor,target,events}=setup();
+  const queued=[];
+  const engine=createAutomation({M:"test",el:()=>({color:"#fff"}),
+    setElement:async()=>{},damage:async()=>events.push("HP changed"),
+    queueManualDamage:async data=>{queued.push(data);return {id:"message-1"};}});
+  const c=engine.makeContext({sourceActor:actor,targetToken:target,reaction:{id:"fire-ice",name:"Frostburn"}});
+  await engine.runEffects([{type:"damage",formula:"2d6",damageType:"cold"}],c);
+  assert.equal(events.length,0,"No HP must be modified when the direct damage roll is posted");
+  assert.equal(queued.length,1);
+  assert.equal(queued[0].reaction.name,"Frostburn");
+  assert.equal(queued[0].targetToken,target);
+  assert.equal(queued[0].damageType,"cold");
+  assert.equal(shouldUseManualDamage({}, {}, 1),true);
+  assert.equal(shouldUseManualDamage({targetMode:"area"},{},1),false);
+  assert.equal(shouldUseManualDamage({damageMode:"automatic"},{},1),false);
+  assert.equal(shouldUseManualDamage({}, {autoDamage:true},1),false);
+  assert.equal(shouldUseManualDamage({}, {},2),false);
+});
+
+test("explicit automatic and area damage bypass manual chat and apply immediately",async()=>{
+  const {actor,target,events}=setup();
+  const queued=[];
+  const engine=createAutomation({M:"test",el:()=>({color:"#fff"}),
+    setElement:async()=>{},damage:async(a,t,formula,type)=>events.push(type),
+    queueManualDamage:async data=>queued.push(data)});
+  const c=engine.makeContext({sourceActor:actor,targetToken:target});
+  await engine.runEffects([
+    {type:"damage",damageMode:"automatic",targetMode:"target",formula:"1d6",damageType:"acid"},
+    {type:"damage",targetMode:"area",radius:5,formula:"1d4",damageType:"fire"}
+  ],c);
+  assert.deepEqual(events,["acid","fire"]);
+  assert.deepEqual(queued,[]);
+});
+
+test("summon lifecycle direct damage is always automatic and never creates approval prompts",async()=>{
+  const {actor,target,events,addToken}=setup();
+  const creature={documentName:"Actor",uuid:"Actor.summon",name:"Rimebud",
+    async getTokenDocument(loc){return {width:1,height:1,toObject:()=>({...loc,width:1,height:1})}}};
+  globalThis.fromUuid=async id=>id===creature.uuid?creature:actor;
+  game.combat={round:1};
+  let state=null;
+  canvas.scene.createEmbeddedDocuments=async(_,docs)=>{
+    const doc={id:"bud",uuid:"Scene.bud",width:1,height:1,x:docs[0].x,y:docs[0].y,disposition:1,
+      async setFlag(scope,key,v){state=v},getFlag:(scope,key)=>state};
+    const token={id:"bud",w:100,h:100,actor,center:{x:doc.x+50,y:doc.y+50},document:doc};
+    doc.object=token;addToken(token);return[doc];
+  };
+  const queued=[];
+  const engine=createAutomation({M:"test",el:()=>({color:"#fff"}),
+    setElement:async()=>{},damage:async(a,t,formula,type)=>events.push(t.id+":"+type),
+    queueManualDamage:async data=>queued.push(data),ensureCollective:async()=>{}});
+  await engine.runEffects([{type:"summon",actorUuid:creature.uuid,entityRef:"rimebud",lifetime:2,
+    onTick:[{type:"damage",targetMode:"target",damageType:"acid",formula:"1d4"}]}],
+    engine.makeContext({sourceActor:actor,targetToken:target,firstElement:"ice",secondElement:"nature"}));
+  await engine.tickEntities();
+  assert.deepEqual(events,["bud:acid"]);
+  assert.equal(queued.length,0);
 });
