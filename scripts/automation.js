@@ -2,17 +2,17 @@
  * All execution occurs on the active GM client; the builder consumes EFFECT_SCHEMA.
  */
 export const EFFECT_SCHEMA = {
-  damage:{label:"Apply damage",fields:["formula","damageType","targetMode","origin","radius","targetFilter","excludeOriginEntity"]},
-  heal:{label:"Heal HP",fields:["formula","targetMode","origin","radius","targetFilter"]},
-  tempHp:{label:"Grant temporary HP",fields:["formula","multiplierEntityRef","targetMode","origin","radius","targetFilter"]},
-  applyElement:{label:"Apply element",fields:["elementId","targetMode","origin","radius","targetFilter"]},
+  damage:{label:"Apply damage",fields:["formula","damageType","targetMode","origin","entityRef","radius","targetFilter","excludeOriginEntity"]},
+  heal:{label:"Heal HP",fields:["formula","targetMode","origin","entityRef","radius","targetFilter"]},
+  tempHp:{label:"Grant temporary HP",fields:["formula","multiplierEntityRef","targetMode","origin","entityRef","radius","targetFilter"]},
+  applyElement:{label:"Apply element",fields:["elementId","targetMode","origin","entityRef","radius","targetFilter"]},
   summon:{label:"Spawn assigned Actor",fields:["actorUuid","entityRef","quantity","lifetime","placement"],children:["onTick","onExpire"]},
   clearEntity:{label:"Clear Entity (assigned Actor)",fields:["entityRef","clearMode"]},
   detonateEntity:{label:"Detonate matching summoned entities",fields:["entityRef","searchRadius","radius","formula","damageType","targetFilter"]},
   zone:{label:"Create zone",fields:["elementId","radius","damageFormula","damageType","targetFilter"]},
-  ability:{label:"Modify an ability",fields:["ability","amount","duration","targetMode","origin","radius","targetFilter"]},
-  resistance:{label:"Grant damage resistance",fields:["damageType","duration","untilTempHpGone","targetMode","origin","radius","targetFilter"]},
-  removeEffects:{label:"Remove reaction effects",fields:["elementsToClear","targetMode","origin","radius","targetFilter"]},
+  ability:{label:"Modify an ability",fields:["ability","amount","duration","targetMode","origin","entityRef","radius","targetFilter"]},
+  resistance:{label:"Grant damage resistance",fields:["damageType","duration","untilTempHpGone","targetMode","origin","entityRef","radius","targetFilter"]},
+  removeEffects:{label:"Remove reaction effects",fields:["elementsToClear","targetMode","origin","entityRef","radius","targetFilter"]},
   annihilate:{label:"Annihilate Light/Dark effects (combat)",fields:["damageType"]},
   sequence:{label:"Sub-bracket / sequence",fields:["label"],children:["steps"]}
 };
@@ -230,7 +230,7 @@ export function createAutomation({M,el,setElement,damage,ensureCollective}) {
       const ids=[];
       for(const t of found){c.positions[ref]=loc(t)||c.positions[ref];if(t?.document?.id)ids.push(t.document.id)}
       if(ids.length)await canvas.scene.deleteEmbeddedDocuments("Token",[...new Set(ids)]);
-      c.entities[ref]=[];
+      c.entities[ref]=[];c.lastEntityRef=ref;
       return;
     }
     if(f.type==="zone"){
