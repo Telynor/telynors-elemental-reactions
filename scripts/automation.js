@@ -6,8 +6,9 @@ export const EFFECT_SCHEMA = {
   heal:{label:"Heal HP",fields:["formula","targetMode","origin","radius","targetFilter"]},
   tempHp:{label:"Grant temporary HP",fields:["formula","targetMode","origin","radius","targetFilter"]},
   applyElement:{label:"Apply element",fields:["elementId","targetMode","origin","radius","targetFilter"]},
-  summon:{label:"Spawn assigned Actor",fields:["actorUuid","entityRef","quantity","lifetime","placement"] ,children:["onTick","onExpire"]},
+  summon:{label:"Spawn assigned Actor",fields:["actorUuid","entityRef","quantity","lifetime","placement"],children:["onTick","onExpire"]},
   clearEntity:{label:"Clear Entity (assigned Actor)",fields:["entityRef","clearMode"]},
+  detonateEntity:{label:"Detonate matching summoned entities",fields:["entityRef","searchRadius","radius","formula","damageType","targetFilter"]},
   zone:{label:"Create zone",fields:["elementId","radius","damageFormula","damageType","targetFilter"]},
   ability:{label:"Modify an ability",fields:["ability","amount","duration","targetMode","origin","radius","targetFilter"]},
   resistance:{label:"Grant damage resistance",fields:["damageType","duration","targetMode","origin","radius","targetFilter"]},
@@ -29,6 +30,7 @@ export const EFFECT_DEFAULTS = {
   applyElement:{type:"applyElement",elementId:"fire",targetMode:"target",targetFilter:"all",origin:"target",radius:5},
   summon:{type:"summon",actorUuid:"",entityRef:"rimebud",quantity:1,lifetime:2,placement:"target",onTick:[],onExpire:[]},
   clearEntity:{type:"clearEntity",entityRef:"rimebud",clearMode:"tracked"},
+  detonateEntity:{type:"detonateEntity",entityRef:"rimebud",searchRadius:5,radius:5,formula:"1d4",damageType:"fire",targetFilter:"all"},
   zone:{type:"zone",elementId:"fire",radius:10,damageFormula:"",damageType:"fire",targetFilter:"all"},
   ability:{type:"ability",ability:"str",amount:-1,duration:2,targetMode:"target",targetFilter:"all",origin:"target",radius:5},
   resistance:{type:"resistance",damageType:"fire",duration:2,targetMode:"target",targetFilter:"all",origin:"target",radius:5},
@@ -36,7 +38,7 @@ export const EFFECT_DEFAULTS = {
   sequence:{type:"sequence",label:"Sub-bracket",steps:[]}
 };
 export function defaultEffect(type){return foundry.utils.deepClone(EFFECT_DEFAULTS[type]||{type});}
-export function createAutomation({M,el,setElement,damage}) {
+export function createAutomation({M,el,setElement,damage,ensureCollective}) {
   const cp=x=>foundry.utils.deepClone(x);
   const tokens=()=>canvas?.tokens?.placeables||[];
   const tokenOfActor=a=>tokens().find(t=>t.actor?.uuid===a?.uuid)||null;
@@ -151,6 +153,29 @@ export function createAutomation({M,el,setElement,damage}) {
         const t=doc.object;if(t){c.entities[ref].push(t);c.affected.add(t);c.positions[ref]=loc(t)}
       }
       c.lastEntityRef=ref;
+      await ensureCollective?.();
+      return;
+    }
+    if(f.type==="detonateEntity"){
+      const ref=f.entityRef||"rimebud",near=radiusPx(f.searchRadius||5);
+      const start=loc(c.targetToken);
+      if(!start)return;
+      const remaining=tokens().filter(t=>t.document?.getFlag(M,"summoned")?.entityRef===ref);
+      const burst=[],queue=[start];
+      while(queue.length&&burst.length<50){
+        const point=queue.shift();
+        for(const t of remaining){
+          if(burst.includes(t)||!loc(t)||dist(point,loc(t))>near)continue;
+          burst.push(t);queue.push(loc(t));
+        }
+      }
+      for(const entity of burst){
+        const scoped=makeContext({...c,entities:{...c.entities,[ref]:[entity]},positions:{...c.positions,[ref]:loc(entity)},lastEntityRef:ref});
+        await executeStep({type:"damage",formula:f.formula||"1d4",damageType:f.damageType||"fire",
+          targetMode:"area",origin:"entity",entityRef:ref,radius:f.radius||5,targetFilter:f.targetFilter||"all"},scoped,depth+1);
+        for(const t of scoped.affected)c.affected.add(t);
+        if(canvas.scene.tokens.get(entity.document.id))await canvas.scene.deleteEmbeddedDocuments("Token",[entity.document.id]);
+      }
       return;
     }
     if(f.type==="clearEntity"){
@@ -168,7 +193,7 @@ export function createAutomation({M,el,setElement,damage}) {
       await canvas.scene.createEmbeddedDocuments("MeasuredTemplate",[{
         t:"circle",user:game.user.id,x:p.x,y:p.y,distance:Number(f.radius)||10,
         fillColor:el(z.elementId)?.color||"#ffffff",flags:{[M]:{zone:z}}
-      }]);return;
+      }]);await ensureCollective?.();return;
     }
     console.warn(M+" | Unsupported builder action:",f.type);
   }
