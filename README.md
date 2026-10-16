@@ -1,26 +1,37 @@
 # Telynor's Elemental Reactions
 
-Foundry VTT v14 / dnd5e module for configurable Genshin-style elemental reactions.
+Foundry VTT v14 / dnd5e elemental reaction engine. Requires Midi-QOL and Dice So Nice.
 
-## Alpha features
+## Elements and reaction builder
 
-- Seven default elements: Fire, Ice, Nature, Wind, Light, Dark, Physical.
-- Element state on tokens with icon badge and glow.
-- Actor infusion: an infused actor applies its active element to every Midi-QOL hit target.
-- Second-element ownership: the actor applying the second element is the reaction source.
-- Reaction directory with the default fusion pair names from Telynor's rules.
-- Reaction Creation Wizard: damage, Actor summons, persistent visible zones, zone damage/element application, and text design.
-- Reaction callouts over every affected token: pop, rise, fade, custom font, gradients; Vortex is Wind → partner element.
-- Player element picker on character sheets, limited to GM-unlocked elements.
-- Collective `Summoned Entities` combat turn for zone/summon processing.
-- Priority-ready special variant override data model.
-- Public API at `game.modules.get("telynors-elemental-reactions").api`.
-- JSON export of element/reaction/variant configuration.
+GM controls are accessible from the token controls rail:
+- **Elemental Directory**: the reaction key. The GM may hide chosen elements from player-visible entries in **GM Element Controls → Player Key**.
+- **GM Element Controls**: mass-apply/remove elemental states, character access and infusion, player key visibility.
+- **Reaction Automation Builder**: opens the manager to edit all preprogrammed and custom elements, reactions, and variants.
 
-## Install
+Select **Reaction Builder**, click a reaction to edit or create one, then add **effect steps**. Steps execute top to bottom in listed order and may be reordered. Use the **Sub-bracket / sequence** step to nest an independent ordered list.
 
-Paste the manifest URL from the latest release into Foundry's **Install Module** dialog.
+Supported builder action types: damage, healing, temporary HP, element application, summon Actor, clear assigned entity, detonate matching entities (with chained detonations), area zone, ability modifier, grant resistance, reduce resistance/immunity by one step, remove reaction effects, Annihilate Light/Dark fusion effects, and nested sequences.
 
-## Important alpha note
+Each damage/healing/effect step can choose the triggering creature, source, assigned entity, or a radius around the target/source/entity. Area targeting can include all creatures, enemies, or allies (based on token disposition relative to the source token).
 
-Foundry sheets and Midi-QOL APIs evolve. This is the first testable alpha; bug reports should include Foundry, dnd5e, Midi-QOL and Dice So Nice versions plus browser-console errors.
+For **Rimebud**, add a **Spawn assigned Actor** step and drag an Actor from the Actors sidebar/compendium into its Actor field. Name the entity (e.g. `rimebud`), set quantity and lifetime, then optionally add nested actions to **Every initiative 0** and **When summon expires**. The entity reference works in **Clear Entity** and subsequent area actions. Clearing preserves its last position for later actions in the same sequence.
+
+Variants use the same editor. Give a variant a matching pair of elements, a priority, an enabled state, and an optional condition. An eligible higher-priority variant takes precedence over the normal reaction. Unmatched variants never fire.
+
+Elements have editable names, icons, primary/glow colors, description and damage type associations. Their persistent IDs cannot change after creation; Divine keeps special reaction semantics but its appearance is editable. The module applies elements on positive Midi-QOL damage, gated by infusion and approved damage types.
+
+## Built-in automation and limitations
+
+The module includes editable starter stacks for Frostburn, Enkindle, Rimebud, Sunshield, Sunder, Ice Aegis, Blizzard, Spriteshield, Prana, Germinate, Curse, Bless and Annihilate, plus the Wind-pair defaults. Starter configurations never intentionally replace customized reaction effect lists.
+
+This remains an **alpha**. In particular, summoned Actors must be assigned by the GM; not all specialized tabletop edge rules are fully automated (for example, all timing edge cases, Physical weapon absorption and Divine multiplayer choice routing). Midi-QOL handles ordinary combat damage; the module handles reaction composition, tags and actions. Verify complex effects in a test scene before using them in live combat.
+
+## Install/update
+
+Install using the manifest URL:
+`https://raw.githubusercontent.com/Telynor/telynors-elemental-reactions/main/module.json`
+
+The GitHub Actions packaging workflow creates a Foundry-ready ZIP with `module.json`, `scripts/`, `styles/` and **`templates/`** at the root, checks JavaScript syntax and runs automation tests. Use Foundry Setup → Add-on Modules → Update to install the latest build.
+
+Report issues with the Foundry, dnd5e, Midi-QOL and Dice So Nice versions plus browser-console errors.
