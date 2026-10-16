@@ -1,5 +1,6 @@
 import {createAutomation,EFFECT_SCHEMA} from "./automation.js";
 import {createReactionBuilder} from "./reaction-builder.js";
+import {createManualDamageFlow} from "./manual-damage.js";
 const M="telynors-elemental-reactions";
 const DEFAULT_DAMAGE_TYPES={fire:["fire","acid"],ice:["cold","psychic"],nature:["poison","lightning"],wind:["thunder","force"],light:["radiant"],dark:["necrotic"],physical:["bludgeoning","piercing","slashing"],divine:[]};
 const E=[["fire","Fire","#ff6a2a"],["ice","Ice","#74e8ff"],["nature","Nature","#62df72"],["wind","Wind","#75e8cf"],["light","Light","#ffe866"],["dark","Dark","#9d68e8"],["physical","Physical","#d9d9d9"],["divine","Divine","#ffffff"]].map(([id,name,color])=>({id,name,color,glow:color,icon:"icons/svg/aura.svg",description:"",damageTypes:DEFAULT_DAMAGE_TYPES[id]||[]}));
@@ -31,13 +32,32 @@ const PAIR_EFFECTS={
 const R=P.map(([a,b,name])=>({id:a+"-"+b,elements:[a,b],name,effects:cpReactionEffects(name),text:{mode:"gradient",direction:"right"}}));
 function cpReactionEffects(name){return foundry.utils.deepClone(REACTION_EFFECTS[name.toLowerCase()]||[])}
 const get=k=>game.settings.get(M,k), cp=x=>foundry.utils.deepClone(x), el=id=>get("elements").find(x=>x.id===id), key=(a,b)=>[a,b].sort().join("|");
-const automation=createAutomation({M,el,setElement,damage,ensureCollective:summonedTurn});
+const manualDamage=createManualDamageFlow({M,applyRolledDamage});
+const automation=createAutomation({M,el,setElement,damage,ensureCollective:summonedTurn,queueManualDamage:manualDamage.queueDamage});
 const ReactionBuilder=createReactionBuilder({M,get,cp});
 function reaction(a,b,context=null){const basic=get("reactions").find(r=>key(...r.elements)===key(a,b));if(!context)return basic;const c={...context,firstElement:a,secondElement:b};const variants=(get("variants")||[]).filter(v=>automation.variantMatches(v,c)).sort((x,y)=>(Number(y.priority)||0)-(Number(x.priority)||0));return variants[0]||basic}
 function active(a){return a?.getFlag(M,"activeElement")} function infused(a){return a?.getFlag(M,"infused")===true} function applied(t){return t?.document?.getFlag(M,"appliedElement")}
 async function chooseDivineReaction(source,t,other){let choices=get("elements").filter(e=>!["divine",other].includes(e.id)).map(e=>({element:e,reaction:reaction(other,e,{sourceActor:source,targetToken:t})})).filter(x=>x.reaction);if(!choices.length)return null;let owner=source?.testUserPermission?game.users.find(u=>u.active&&!u.isGM&&source.testUserPermission(u,"OWNER")):null;if(owner&&owner.id!==game.user.id){ui.notifications.info("Divine reaction choice must be made by "+owner.name+".");return null}let html='<p>Divine may be treated as any element. Choose the reaction:</p><div class="ter-divine-choices">'+choices.map(x=>'<button type="button" data-element="'+x.element.id+'"><strong>Immaculate '+x.reaction.name+'</strong><br><small>as '+x.element.name+'</small></button>').join("")+'</div>';return await new Promise(resolve=>{let dlg=new foundry.applications.api.DialogV2({window:{title:"Divine Element — Immaculate Reaction"},content:html,buttons:choices.map(x=>({action:x.element.id,label:"Immaculate "+x.reaction.name,callback:()=>x})),close:()=>resolve(null)});dlg.render({force:true});dlg.addEventListener?.("close",()=>resolve(null));setTimeout(()=>dlg.element?.querySelectorAll("[data-element]").forEach(b=>b.onclick=()=>{let x=choices.find(y=>y.element.id===b.dataset.element);resolve(x);dlg.close()}),50)})}
 async function setElement(t,id,source){if(!t||!el(id))return;let old=applied(t);if(old&&old!==id){if(id==="divine"||old==="divine"){let other=id==="divine"?old:id,choice=await chooseDivineReaction(source,t,other);if(choice){await t.document.unsetFlag(M,"appliedElement");await refresh(t);await runReaction({...choice.reaction,_immaculate:true},{sourceActor:source,targetToken:t,firstElement:other,secondElement:choice.element.id});return refresh(t)}}else{let r=reaction(old,id,{sourceActor:source,targetToken:t});if(r){await t.document.unsetFlag(M,"appliedElement");await refresh(t);await runReaction(r,{sourceActor:source,targetToken:t,firstElement:old,secondElement:id});return refresh(t)}}}await t.document.setFlag(M,"appliedElement",id);await refresh(t);console.log(`${M} | Applied ${id} to ${t.name||t.document?.name}`)}
-async function damage(actor,t,formula,type){if(!formula||!t?.actor)return 0;let roll=await new Roll(formula,actor?.getRollData?.()||{}).evaluate();if(game.dice3d)try{await game.dice3d.showForRoll(roll,game.user,true)}catch{};if(globalThis.MidiQOL?.applyTokenDamage)await MidiQOL.applyTokenDamage([{damage:roll.total,type:type||"none",properties:new Set()}],roll.total,new Set([t]),null,null);else{let hp=t.actor.system.attributes.hp;await t.actor.update({"system.attributes.hp.value":Math.max(0,hp.value-roll.total)})}return roll.total}
+async function applyRolledDamage({targetToken:t,amount,damageType:type}){
+  if(!t?.actor)throw new Error("Target creature is missing an Actor.");
+  const value=Math.max(0,Number(amount)||0);
+  if(!value)return 0;
+  if(globalThis.MidiQOL?.applyTokenDamage)
+    await MidiQOL.applyTokenDamage([{damage:value,type:type||"none",properties:new Set()}],value,new Set([t]),null,null);
+  else{
+    const hp=t.actor.system?.attributes?.hp;
+    if(!hp)throw new Error("Target Actor has no HP.");
+    await t.actor.update({"system.attributes.hp.value":Math.max(0,(Number(hp.value)||0)-value)});
+  }
+  return value;
+}
+async function damage(actor,t,formula,type){
+  if(!formula||!t?.actor)return 0;
+  const roll=await new Roll(formula,actor?.getRollData?.()||{}).evaluate();
+  if(game.dice3d)try{await game.dice3d.showForRoll(roll,game.user,true)}catch{}
+  return applyRolledDamage({sourceActor:actor,targetToken:t,amount:roll.total,damageType:type});
+}
 async function runEffect(effect,c){const ctx=automation.makeContext(c);await automation.runEffects([effect],ctx);return [...ctx.affected]}
 async function runReaction(r,c){const ctx=automation.makeContext({...c,reaction:r,affected:new Set([c.targetToken])});await automation.runEffects(r.effects||[],ctx);if(c.targetToken?.center)callout(c.targetToken,r,c);Hooks.callAll(M+".reaction",{reaction:r,...c,affected:[...ctx.affected]})}
 function layer(){let d=document.querySelector("#ter-callout-layer");if(!d){d=document.createElement("div");d.id="ter-callout-layer";document.body.append(d)}return d}
