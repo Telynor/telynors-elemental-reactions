@@ -7,13 +7,13 @@ export function createReactionBuilder({M,get,cp}) {
   const html=x=>String(x??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
   const types=Object.entries(EFFECT_SCHEMA);
   const fieldLabels={
-    formula:"Dice formula",damageType:"D&D damage type",damageMode:"Damage application",elementId:"Element",targetMode:"Apply to",
+    formula:"Dice formula (for Enkindle, rolled once per consumed entity)",damageType:"D&D damage type",damageMode:"Damage application",elementId:"Element",targetMode:"Apply to",
     origin:"Area centered on",radius:"Radius (feet)",targetFilter:"Target creatures",
     actorUuid:"Assigned Actor UUID (drop an Actor below)",entityRef:"Entity variable / name",
     quantity:"Number to create",lifetime:"Lifetime (combat rounds, 0 = indefinite)",
     placement:"Spawn near",clearMode:"Clear scope",ability:"Ability",amount:"Ability change (+/-)",
     duration:"Duration (rounds)",elementsToClear:"Elements to clear (comma-separated)",
-    damageFormula:"Zone damage formula (optional)",label:"Bracket title",searchRadius:"Chain search radius (feet)",multiplierEntityRef:"Multiply by active entities (reference)",untilTempHpGone:"Keep resistance only while temporary HP remains",excludeOriginEntity:"Exclude the assigned entity itself"
+    damageFormula:"Zone damage formula (optional)",label:"Bracket title",searchRadius:"Legacy chain search radius (unused)",multiplierEntityRef:"Multiply by active entities (reference)",untilTempHpGone:"Keep resistance only while temporary HP remains",excludeOriginEntity:"Exclude the assigned entity itself"
   };
   const numberFields=new Set(["radius","quantity","lifetime","amount","duration","searchRadius"]);const checkboxFields=new Set(["untilTempHpGone","excludeOriginEntity"]);
   function valuesFor(name){
