@@ -57,3 +57,39 @@ test("variant matching respects pair, priority preconditions and HP",()=>{
   assert.equal(engine.variantMatches({enabled:false,elements:["ice","fire"],condition:{type:"always"}},context),false);
   assert.equal(engine.variantMatches({enabled:true,elements:["wind","ice"],condition:{type:"always"}},context),false);
 });
+
+test("summoned Actor runs initiative ticks, nested expiry effects, then clears token",async()=>{
+  const {actor,target,events,deleted,addToken}=setup();
+  const summonedActor={documentName:"Actor",uuid:"Actor.rimebud",
+    async getTokenDocument(position){return {toObject:()=>({...position,name:"Rimebud"})}}};
+  globalThis.fromUuid=async uuid=>uuid===summonedActor.uuid?summonedActor:actor;
+  globalThis.game.combat={round:1};
+  let created=null,entityState=null;
+  canvas.scene.createEmbeddedDocuments=async(type,docs)=>{
+    assert.equal(type,"Token");
+    const token={id:"rimebud",center:{x:210,y:100},w:100,h:100,actor,document:null};
+    const doc={id:"rimebud",x:200,y:100,uuid:"Scene.token.rimebud",disposition:1,object:token,
+      async setFlag(m,k,value){entityState=value},
+      getFlag(m,k){return k==="summoned"?entityState:null}};
+    token.document=doc;created=token;addToken(token);
+    return [doc];
+  };
+  const engine=createAutomation({M:"test",el:()=>({color:"#fff"}),
+    setElement:async()=>{},damage:async(a,t,formula,type)=>events.push("hit:"+t.id+":"+type),
+    ensureCollective:async()=>{}});
+  const c=engine.makeContext({sourceActor:actor,targetToken:target,firstElement:"ice",secondElement:"nature",
+    reaction:{id:"ice-nature",name:"Rimebud"}});
+  await engine.runEffects([{type:"summon",actorUuid:summonedActor.uuid,entityRef:"rimebud",quantity:1,lifetime:2,
+    onTick:[{type:"damage",formula:"1d4",damageType:"acid",targetMode:"target"}],
+    onExpire:[{type:"damage",formula:"1d4",damageType:"fire",targetMode:"target"}]}],c);
+  assert.equal(created.id,"rimebud");
+  await engine.tickEntities();
+  assert.deepEqual(events,["hit:rimebud:acid"]);
+  game.combat.round=2;
+  await engine.tickEntities();
+  assert.deepEqual(events,["hit:rimebud:acid","hit:rimebud:acid"]);
+  game.combat.round=3;
+  await engine.tickEntities();
+  assert.deepEqual(events,["hit:rimebud:acid","hit:rimebud:acid","hit:rimebud:fire"]);
+  assert.deepEqual(deleted,["rimebud"]);
+});
