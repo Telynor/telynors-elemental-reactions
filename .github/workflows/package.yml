@@ -18,12 +18,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Validate module JavaScript and automation tests
+        run: |
+          for file in scripts/*.js; do
+            node --input-type=module --check < "$file"
+          done
+          node --test tests/automation.test.mjs
       - name: Build Foundry-ready ZIP
         run: |
           rm -f telynors-elemental-reactions.zip
           zip -r telynors-elemental-reactions.zip module.json scripts styles templates -x "*.DS_Store"
           # Fail the build if any of the app window templates are missing.
-          for file in templates/directory.hbs templates/gm-panel.hbs templates/manager.hbs templates/element-editor.hbs templates/reaction-wizard.hbs templates/character-element.hbs; do
+          for file in templates/directory.hbs templates/gm-panel.hbs templates/manager.hbs templates/element-editor.hbs templates/reaction-wizard.hbs templates/character-element.hbs templates/reaction-builder.hbs scripts/automation.js scripts/reaction-builder.js; do
             unzip -Z1 telynors-elemental-reactions.zip | grep -Fxq "$file" || { echo "Missing package file: $file"; exit 1; }
           done
           unzip -Z1 telynors-elemental-reactions.zip | grep -Fxq "module.json"
